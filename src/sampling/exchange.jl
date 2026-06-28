@@ -51,8 +51,8 @@ sampler needs.
   exchange: `bilinear[a,b] = S_ab` with `bilinear[b,a] ≈ S_ab'` (the field is
   `g_a = Σ_b S_ab ⟨e_b⟩`); the symmetric/antisymmetric parts carry anisotropic / DM
   exchange.
-- `ExchangeModel(model)` — extract `bilinear` and `onsite` from a fitted [`SCEModel`](@ref)
-  by reusing the Sunny bilinear (`ls=[1,1]`) and single-ion (`ls=[2]`) extraction; only the
+- `ExchangeModel(model)` — extract `bilinear` and `onsite` from a fitted `SCEModel`
+  by reusing the core's bilinear (`ls=[1,1]`) and single-ion (`ls=[2]`) extraction; only the
   higher-order / higher-`l` channels are dropped (a P4 extension) and reported via `@warn`.
 """
 struct ExchangeModel
