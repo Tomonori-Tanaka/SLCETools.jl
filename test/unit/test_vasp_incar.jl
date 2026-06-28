@@ -4,7 +4,7 @@
 # passthrough, the magnitude sources, the SAXIS frame round-trip, and the constraint block.
 
 using Test
-using MagestyRebuild
+using SCEFitting
 using SCETools
 using LinearAlgebra
 using Random

@@ -1,5 +1,5 @@
 using Test
-using MagestyRebuild
+using SCEFitting
 using SCETools
 using SCETools.VASP: read_poscar, write_poscar, Oszicar
 using LinearAlgebra

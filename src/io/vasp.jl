@@ -1,5 +1,5 @@
 # VASP I/O — the code-specific adapter for the VASP DFT code, kept out of the code-agnostic
-# fitting core. The core (`MagestyRebuild`) owns only the abstract DFT-data seam
+# fitting core. The core (`SCEFitting`) owns only the abstract DFT-data seam
 # (`AbstractDFTSource` / `SpinDatum` / `read_configs` / `SCEDataset`); this module provides the
 # concrete VASP reader and writer:
 #
@@ -21,8 +21,8 @@ module VASP
 using Printf
 using StaticArrays
 using LinearAlgebra: norm, det
-using MagestyRebuild: Crystal, Lattice, AbstractDFTSource, SpinDatum, num_atoms
-import MagestyRebuild: read_configs
+using SCEFitting: Crystal, Lattice, AbstractDFTSource, SpinDatum, num_atoms
+import SCEFitting: read_configs
 
 export read_poscar, write_poscar, Oszicar, write_incar, write_inputs
 
@@ -173,7 +173,7 @@ end
     SCETools.VASP.Oszicar(paths; saxis = [0, 0, 1], energy_kind = :free, mint = false)
 
 An `AbstractDFTSource` over one or more VASP OSZICAR files — each contributes one `SpinDatum`
-(in the given order, through `MagestyRebuild.read_configs`). `paths` may be a single path or a
+(in the given order, through `SCEFitting.read_configs`). `paths` may be a single path or a
 vector.
 
 # Keyword arguments

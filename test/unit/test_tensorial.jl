@@ -5,7 +5,7 @@
 # reproduces the quadrature self-consistency, and that DMI tilts a collinear reference.
 
 using Test
-using MagestyRebuild
+using SCEFitting
 using SCETools
 using LinearAlgebra
 using Random

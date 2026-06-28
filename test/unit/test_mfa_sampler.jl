@@ -5,7 +5,7 @@
 # physics as Magesty's `MfaSampling`.
 
 using Test
-using MagestyRebuild
+using SCEFitting
 using SCETools
 using LinearAlgebra
 using Random

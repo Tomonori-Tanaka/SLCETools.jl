@@ -2,7 +2,7 @@
     SCETools
 
 Auxiliary tooling around the spin-cluster-expansion (SCE) fitting core
-[`MagestyRebuild`](https://github.com/Tomonori-Tanaka/Magesty_rebuild.jl): utilities that
+[`SCEFitting`](https://github.com/Tomonori-Tanaka/SCEFitting.jl): utilities that
 *consume* a fitted `SCEModel`
 rather than build one. The first component is the **mean-field (MFA) spin-configuration
 sampler** — draw physically representative finite-temperature spin configurations from the
@@ -10,9 +10,9 @@ single-site mean field of a fitted model (or a hand-built exchange model) at a c
 reduced temperature `τ = T/T_MF`. Future components (active learning, configuration /
 diagnostic helpers) live alongside it.
 
-The package reads the fitted Hamiltonian only through `MagestyRebuild`'s public
+The package reads the fitted Hamiltonian only through `SCEFitting`'s public
 introspection surface (`multipole_terms`, `bilinear_terms`, and the tesseral-harmonic
-submodule `MagestyRebuild.Harmonics`), never its SALC-basis internals.
+submodule `SCEFitting.Harmonics`), never its SALC-basis internals.
 
 See `docs/specs/mfa-sampling.md` for the sampler design.
 """
@@ -27,8 +27,8 @@ using Random: AbstractRNG, default_rng
 # surface (so the sampler never reaches into the SALC-basis internals). `Harmonics` is the
 # core's tesseral spherical-harmonic kernel, imported so the moved sampler files keep their
 # `Harmonics.Zlm` / `Harmonics.lm_index` calls unchanged.
-import MagestyRebuild.Harmonics
-using MagestyRebuild: SCEModel, num_atoms, multipole_terms, MultipoleTerm, bilinear_terms
+import SCEFitting.Harmonics
+using SCEFitting: SCEModel, num_atoms, multipole_terms, MultipoleTerm, bilinear_terms
 
 # --- mean-field spin-configuration sampling (docs/specs/mfa-sampling.md) ---
 # P0: the single-site engine (potential, vMF / Metropolis draws, sphere quadrature).
@@ -42,7 +42,7 @@ include("sampling/mfa_sampler.jl")
 include("sampling/sce_bridge.jl")
 
 # VASP input writing: sampled spin configurations → constrained-noncollinear INCAR / input
-# sets. Namespaced as `SCETools.VASP` (mirrors the reader-side `MagestyRebuild.VASP`), so it
+# sets. Namespaced as `SCETools.VASP` (mirrors the reader-side `SCEFitting.VASP`), so it
 # does not grow the top-level export list.
 include("io/vasp.jl")
 

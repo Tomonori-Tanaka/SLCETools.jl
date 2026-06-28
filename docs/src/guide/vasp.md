@@ -5,7 +5,7 @@ CurrentModule = SCETools
 ```
 
 `SCETools.VASP` is the concrete VASP adapter for the SCE workflow — the code-specific I/O the
-fitting core ([MagestyRebuild](https://github.com/Tomonori-Tanaka/Magesty_rebuild.jl)) keeps
+fitting core ([SCEFitting](https://github.com/Tomonori-Tanaka/SCEFitting.jl)) keeps
 out of itself (the core owns only the abstract `AbstractDFTSource` / `SpinDatum` /
 `SCEDataset` seam). It goes both ways:
 
@@ -20,7 +20,7 @@ identity.
 ## Reading DFT training data
 
 ```@example vaspio
-using MagestyRebuild, SCETools
+using SCEFitting, SCETools
 using SCETools.VASP: read_poscar, Oszicar
 
 dir = mktempdir()
@@ -32,7 +32,7 @@ crystal = read_poscar(joinpath(dir, "POSCAR"))            # → Crystal
 ```
 
 An [`Oszicar`](@ref SCETools.VASP.Oszicar) wraps one or more constrained-noncollinear OSZICAR
-files as an `AbstractDFTSource`; `MagestyRebuild.read_configs` turns it into `SpinDatum`s
+files as an `AbstractDFTSource`; `SCEFitting.read_configs` turns it into `SpinDatum`s
 (energy, spin directions, moment magnitudes, constraining field, and the derived torque
 target ``\boldsymbol\tau_a = \boldsymbol m_a \times \boldsymbol B_a``), and `SCEDataset` goes
 straight from the source to a fit-ready dataset:

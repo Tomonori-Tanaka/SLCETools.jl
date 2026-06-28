@@ -6,7 +6,7 @@
 #   make clean        remove the build/ output
 #
 # The first run resolves docs/Project.toml (Documenter + LiveServer + SCETools +
-# MagestyRebuild, both by path). MagestyRebuild must sit at ../../Magesty_rebuild.jl.
+# SCEFitting, both by path). SCEFitting must sit at ../../SCEFitting.jl.
 
 .PHONY: build serve open clean help
 

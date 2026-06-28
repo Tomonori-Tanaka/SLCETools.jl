@@ -1,22 +1,22 @@
 # SPEC — SCETools.jl
 
-Auxiliary tooling around the SCE fitting core `MagestyRebuild.jl`. Components **consume** a
+Auxiliary tooling around the SCE fitting core `SCEFitting.jl`. Components **consume** a
 fitted `SCEModel` (or a hand-built exchange model); they never build or fit one. This file
 records the realized architecture and the planned active-learning layer.
 
 ## Dependency boundary
 
-`SCETools` depends on `MagestyRebuild` and reads a fitted model **only** through its public
+`SCETools` depends on `SCEFitting` and reads a fitted model **only** through its public
 surface:
 
 - `multipole_terms(model) :: Vector{MultipoleTerm}` — the flat, code-neutral per-term view
   (raw `jϕ` coefficient, `body`, `atoms`, `shifts`, `ls`, `folded`).
 - `bilinear_terms(model) :: (; pairs, onsites, skipped)` — the bilinear (`ls=[1,1]`) /
   single-ion (`ls=[2]`) channels as Cartesian `3×3` matrices.
-- `num_atoms(model)` and the tesseral submodule `MagestyRebuild.Harmonics` (`Zlm`, `lm_index`).
+- `num_atoms(model)` and the tesseral submodule `SCEFitting.Harmonics` (`Zlm`, `lm_index`).
 
 It never touches the SALC-basis internals (`model.basis.salcs.salcs`, `SALCMember`,
-`SALCTerm`). The development dependency is a path-dev (`Pkg.develop(path="../Magesty_rebuild.jl")`).
+`SALCTerm`). The development dependency is a path-dev (`Pkg.develop(path="../SCEFitting.jl")`).
 
 ## Module layout
 
@@ -55,7 +55,7 @@ seam). Both directions, with one shared frame / format convention so a write →
 is the identity:
 
 - **read** — `read_poscar(path) -> Crystal`; `Oszicar(paths; saxis, energy_kind, mint)` (an
-  `AbstractDFTSource`, consumed by `MagestyRebuild.read_configs` / `SCEDataset`). Produces
+  `AbstractDFTSource`, consumed by `SCEFitting.read_configs` / `SCEDataset`). Produces
   training data.
 - **write** — `write_poscar(path, crystal; …)`; `write_incar(path, directions; magmoms, base,
   constrain, saxis, …)`; `write_inputs(dir | rootdir, crystal, config | configs; …)` (a POSCAR +
@@ -73,9 +73,9 @@ An efficient SCE model-construction loop, closing the sample → label → refit
 
 1. **Propose** candidate configurations with the MFA sampler at a chosen `τ` (cheap,
    physically representative), optionally targeted by an acquisition criterion.
-2. **Label** them with DFT (write inputs via `MagestyRebuild.VASP`, run an external solver,
+2. **Label** them with DFT (write inputs via `SCEFitting.VASP`, run an external solver,
    read back energies / torques as `SpinDatum`).
-3. **Refit** the SCE model with `MagestyRebuild.fit` / `refit` on the augmented dataset.
+3. **Refit** the SCE model with `SCEFitting.fit` / `refit` on the augmented dataset.
 4. **Assess** uncertainty / acquisition and iterate until a target is met.
 
 The existing `ActiveSCE.jl` (GroupARD posterior, acquisition policies, finite-T campaign

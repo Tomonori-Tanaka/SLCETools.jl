@@ -6,7 +6,7 @@
 # Run:  julia --project=test/oracle test/oracle/runtests.jl
 
 using Test
-using MagestyRebuild: read_configs
+using SCEFitting: read_configs
 using SCETools
 using Magesty
 

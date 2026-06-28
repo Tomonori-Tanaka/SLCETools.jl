@@ -1,6 +1,6 @@
 # Mean-field sampler — extracting an `ExchangeModel` / `MultipoleField` from a fitted SCE
 # (see `docs/specs/mfa-sampling.md`). Reads the fitted Hamiltonian only through the core's
-# public introspection surface (`MagestyRebuild.bilinear_terms` / `multipole_terms`), never
+# public introspection surface (`SCEFitting.bilinear_terms` / `multipole_terms`), never
 # the SALC-basis internals — so the basis representation can evolve independently.
 
 # Build the directed bilinear tensor `bilinear[a,b] = S_ab` and single-ion `onsite[a] = A_a`

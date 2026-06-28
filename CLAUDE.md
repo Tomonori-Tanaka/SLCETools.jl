@@ -7,7 +7,7 @@
 ## Project goal
 
 Auxiliary tooling around the SCE fitting core
-[`MagestyRebuild.jl`](../Magesty_rebuild.jl): utilities that **consume** a fitted
+[`SCEFitting.jl`](../SCEFitting.jl): utilities that **consume** a fitted
 `SCEModel` rather than build one. The first component is the **mean-field (MFA)
 spin-configuration sampler** — draw physically representative finite-temperature spin
 configurations from the single-site mean field of a fitted model (or a hand-built
@@ -17,16 +17,16 @@ numerical correctness and reproducibility, and the same physical conventions as 
 core (this package never re-derives them — it reads the fitted Hamiltonian through the
 core's public surface).
 
-This package depends on `MagestyRebuild` and reads a fitted model **only** through its
+This package depends on `SCEFitting` and reads a fitted model **only** through its
 public introspection surface — `multipole_terms`, `bilinear_terms`, `num_atoms(model)`,
-and the tesseral spherical-harmonic submodule `MagestyRebuild.Harmonics` (`Zlm`,
+and the tesseral spherical-harmonic submodule `SCEFitting.Harmonics` (`Zlm`,
 `lm_index`) — never the SALC-basis internals (`model.basis.salcs.salcs`, `SALCMember`,
 `SALCTerm`). During development the dependency is a path-dev:
-`Pkg.develop(path="../Magesty_rebuild.jl")`.
+`Pkg.develop(path="../SCEFitting.jl")`.
 
 ## Numerical / physics conventions
 
-Inherited from the core (`MagestyRebuild`'s `CLAUDE.md`); the ones this package leans on:
+Inherited from the core (`SCEFitting`'s `CLAUDE.md`); the ones this package leans on:
 
 - **Spin directions are unit vectors**; configuration layout `3 × n_atoms` (rows x,y,z;
   columns atoms). The `reference` is the same layout.
@@ -41,7 +41,7 @@ Inherited from the core (`MagestyRebuild`'s `CLAUDE.md`); the ones this package 
 
 ## Coupled ("linked") code sites — change one, check all
 
-- **`sce_bridge.jl` ↔ the core's introspection contract** (`MagestyRebuild`'s
+- **`sce_bridge.jl` ↔ the core's introspection contract** (`SCEFitting`'s
   `sce/introspect.jl`): `MultipoleField(model)` consumes `multipole_terms` and applies
   `coef·(4π)^(body/2)`; `ExchangeModel(model)` consumes `bilinear_terms` (the `3×3`
   bilinear / single-ion matrices). If a `MultipoleTerm` field or the scale convention
@@ -49,9 +49,9 @@ Inherited from the core (`MagestyRebuild`'s `CLAUDE.md`); the ones this package 
   (`test/unit/test_{multipole,tensorial,exchange,mfa_sampler}.jl`): exact reduction to the
   single-global Langevin curve, scale invariance, and the many-body factorization check
   `V_a/β = ⟨E | e_a⟩` to machine precision.
-- **`site_engine.jl` ↔ `MagestyRebuild.Harmonics`** (`Zlm`, `lm_index`): the quadrature /
+- **`site_engine.jl` ↔ `SCEFitting.Harmonics`** (`Zlm`, `lm_index`): the quadrature /
   vMF / Metropolis kernels evaluate tesseral harmonics through the core submodule (bound
-  here by `import MagestyRebuild.Harmonics`). A normalization change upstream shifts every
+  here by `import SCEFitting.Harmonics`). A normalization change upstream shifts every
   multipole average.
 - **`exchange.jl` `_l1_coeffs!` / `_l2_coeffs!`** (field → tesseral coefficients) are the
   *forward* of the core's `_l1_pair_matrix` / `_l2_onsite_matrix` (tesseral → `3×3`). The
@@ -65,7 +65,7 @@ Inherited from the core (`MagestyRebuild`'s `CLAUDE.md`); the ones this package 
   `_poscar_order` must reproduce `write_poscar`'s species grouping exactly, or `write_inputs`
   silently misassigns moments to atoms. (3) **MAGMOM = magnitude · direction**, M_CONSTR ==
   MAGMOM under `constrain`. (4) The **torque sign / SpinDatum layout** is owned upstream by
-  `MagestyRebuild`'s `dftsource.jl` (`τ_a = m_a × B_a`); the OSZICAR reader must keep producing
+  `SCEFitting`'s `dftsource.jl` (`τ_a = m_a × B_a`); the OSZICAR reader must keep producing
   that. Gates: `test/unit/test_vaspio.jl` (read), `test/unit/test_vasp_incar.jl` (write,
   round-trip / order / formatting), `test/oracle/` (parsers vs Magesty bit-for-bit). The sampler
   gives only directions + an order parameter `m_a ∈ [0,1]`, **not** μ_B magnitudes — the write
@@ -80,7 +80,7 @@ Inherited from the core (`MagestyRebuild`'s `CLAUDE.md`); the ones this package 
 | `TEST_MODE=jet julia --project -e 'using Pkg; Pkg.test()'` | JET type-stability |
 
 The suite (`test/runtests.jl`) dispatches on `TEST_MODE`
-(`default`/`all`/`unit`/`aqua`/`jet`). It needs `MagestyRebuild` available (path-dev).
+(`default`/`all`/`unit`/`aqua`/`jet`). It needs `SCEFitting` available (path-dev).
 
 ## References
 

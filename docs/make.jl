@@ -1,5 +1,5 @@
 using SCETools
-using MagestyRebuild   # the SCE fitting core, for the executed `@example` model builds
+using SCEFitting   # the SCE fitting core, for the executed `@example` model builds
 using Documenter
 
 DocMeta.setdocmeta!(SCETools, :DocTestSetup, :(using SCETools); recursive = true)

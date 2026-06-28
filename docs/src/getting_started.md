@@ -7,12 +7,12 @@ CurrentModule = SCETools
 ## Installation
 
 SCETools.jl is an exploratory package and is not registered. It depends on the SCE fitting
-core [MagestyRebuild.jl](https://github.com/Tomonori-Tanaka/Magesty_rebuild.jl); add both
+core [SCEFitting.jl](https://github.com/Tomonori-Tanaka/SCEFitting.jl); add both
 from their local paths (or git URLs) in the package manager:
 
 ```julia
 using Pkg
-Pkg.develop(path = "/path/to/Magesty_rebuild.jl")   # the SCE fitting core
+Pkg.develop(path = "/path/to/SCEFitting.jl")   # the SCE fitting core
 Pkg.develop(path = "/path/to/SCETools.jl")
 ```
 
@@ -20,13 +20,13 @@ Both packages have only lightweight dependencies.
 
 ## Sample a Heisenberg dimer from a fitted model
 
-The shortest meaningful end-to-end: build a tiny fitted model with MagestyRebuild, then draw
+The shortest meaningful end-to-end: build a tiny fitted model with SCEFitting, then draw
 finite-temperature configurations from its mean field. Here is a 4-atom chain whose
 nearest-neighbour pair (atoms 1–2) carries a ferromagnetic Heisenberg coupling; atoms 3–4 are
 uncoupled.
 
 ```@example gs
-using MagestyRebuild, SCETools
+using SCEFitting, SCETools
 using LinearAlgebra, Random, Statistics
 
 # A 4-atom chain along z; nearest-neighbour 2-body isotropic (Heisenberg) basis.

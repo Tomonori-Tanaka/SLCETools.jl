@@ -66,7 +66,7 @@ mf = MultipoleField(model)         # all clusters and l, higher-order / many-bod
 s  = MFASampler(model; reference)  # ≡ MFASampler(MultipoleField(model); reference)
 ```
 
-Both extractions read the fitted model through MagestyRebuild's public introspection surface
+Both extractions read the fitted model through SCEFitting's public introspection surface
 (`multipole_terms`, `bilinear_terms`) — never its SALC-basis internals — so they are insulated
 from the core's basis representation.
 

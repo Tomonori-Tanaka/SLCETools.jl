@@ -8,7 +8,7 @@
 #
 # Run:  julia --project=examples examples/vasp_dft_source.jl
 
-using MagestyRebuild
+using SCEFitting
 using SCETools
 using SCETools.VASP: read_poscar, Oszicar
 using LinearAlgebra

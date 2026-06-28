@@ -6,7 +6,7 @@
 # potential to the conditional mean SCE energy ⟨E | e_a⟩ of a biquadratic model.
 
 using Test
-using MagestyRebuild
+using SCEFitting
 using SCETools
 using LinearAlgebra
 using Random

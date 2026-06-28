@@ -6,10 +6,20 @@ release, so everything lives under *Unreleased*.
 
 ## [Unreleased]
 
-### Changed — VASP **reader** moved in from MagestyRebuild (all VASP I/O now here)
+### Changed — fitting-core dependency renamed `MagestyRebuild` → `SCEFitting`
+
+The fitting core this package builds on was renamed from `MagestyRebuild`
+(`Magesty_rebuild.jl`) to **`SCEFitting`** (`SCEFitting.jl`), unifying the naming under a
+shared `SCE*` family. The UUID is unchanged, so this is purely a name update: `using
+MagestyRebuild` becomes `using SCEFitting`, the path-dev points at `../SCEFitting.jl`, and the
+`SCEFitting.Harmonics` / `multipole_terms` / `bilinear_terms` introspection surface keeps the
+same shape. The legacy `Magesty.jl` package used by the `test/oracle/` cross-check is
+unaffected and keeps its name.
+
+### Changed — VASP **reader** moved in from SCEFitting (all VASP I/O now here)
 
 The concrete VASP reader (`read_poscar`, `write_poscar`, `Oszicar` → `SpinDatum` via the
-`MagestyRebuild.read_configs` seam) moved out of the fitting core into `SCETools.VASP`, joining
+`SCEFitting.read_configs` seam) moved out of the fitting core into `SCETools.VASP`, joining
 the writer so all VASP I/O lives in one place. The fitting core now keeps only the abstract
 DFT-data seam (`AbstractDFTSource` / `SpinDatum` / `SCEDataset`). Reading VASP training data is
 now `using SCETools; SCETools.VASP.read_poscar` / `Oszicar`. The unit tests
@@ -27,7 +37,7 @@ active-learning "label" step). Part of the `SCETools.VASP` adapter (alongside th
   A `base` template (path or raw text) is preserved verbatim except for MAGMOM / M_CONSTR;
   without one, a minimal noncollinear INCAR is written.
 - **`write_inputs(dir, crystal, config; …)` / `write_inputs(rootdir, crystal, configs; …)`** —
-  write a full input set (POSCAR via `MagestyRebuild.VASP.write_poscar` + a matching INCAR), or
+  write a full input set (POSCAR via `SCEFitting.VASP.write_poscar` + a matching INCAR), or
   a sweep with one subdirectory per configuration. The INCAR's atom order is regrouped by
   species to match the POSCAR, so the two files are always consistent.
 - **Moment magnitudes** (μ_B — the sampler only gives directions) come from a per-atom vector, a
@@ -40,9 +50,9 @@ active-learning "label" step). Part of the `SCETools.VASP` adapter (alongside th
 
 ### Added — initial package: the mean-field spin-configuration sampler
 
-Extracted from `MagestyRebuild.jl` (where it was developed as phases P0–P4) into this
+Extracted from `SCEFitting.jl` (where it was developed as phases P0–P4) into this
 auxiliary package, which depends on the core for the fitted model and its public
-introspection surface (`multipole_terms`, `bilinear_terms`, `MagestyRebuild.Harmonics`).
+introspection surface (`multipole_terms`, `bilinear_terms`, `SCEFitting.Harmonics`).
 
 - **P0 — single-site engine** (`sampling/site_engine.jl`): the single-site tesseral
   potential `H_a(e) = Σ h^{lm} Z_lm(e)`, the von Mises–Fisher draw (Ulrich/Wood inverse-CDF

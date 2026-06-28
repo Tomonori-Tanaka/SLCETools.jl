@@ -5,7 +5,7 @@ CurrentModule = SCETools
 ```
 
 Auxiliary tooling around the spin-cluster-expansion (SCE) fitting core
-[MagestyRebuild.jl](https://github.com/Tomonori-Tanaka/Magesty_rebuild.jl) — utilities that
+[SCEFitting.jl](https://github.com/Tomonori-Tanaka/SCEFitting.jl) — utilities that
 **consume** a fitted `SCEModel` rather than build one.
 
 The first component is the **mean-field (MFA) spin-configuration sampler**: draw physically
@@ -16,10 +16,10 @@ enrich an SCE training set, which is why sampling and (planned) active learning 
 together.
 
 !!! note "Status — companion to an architectural exploration (v0)"
-    SCETools depends on MagestyRebuild and reads a fitted model **only** through its public
-    introspection surface — [`multipole_terms`](https://github.com/Tomonori-Tanaka/Magesty_rebuild.jl),
-    `bilinear_terms`, `num_atoms`, and the tesseral submodule `MagestyRebuild.Harmonics` —
-    never its SALC-basis internals. The sampler was developed inside MagestyRebuild (phases
+    SCETools depends on SCEFitting and reads a fitted model **only** through its public
+    introspection surface — [`multipole_terms`](https://github.com/Tomonori-Tanaka/SCEFitting.jl),
+    `bilinear_terms`, `num_atoms`, and the tesseral submodule `SCEFitting.Harmonics` —
+    never its SALC-basis internals. The sampler was developed inside SCEFitting (phases
     P0–P4) and extracted here when the core was narrowed to fitting only.
 
 ## The sampler at a glance
@@ -51,7 +51,7 @@ The [`ExchangeModel`](@ref) carrier can be built by hand (raw couplings, or a TB
 
 ## Relationship to the ecosystem
 
-This package re-founds the sampling / active-learning layer on the clean MagestyRebuild
+This package re-founds the sampling / active-learning layer on the clean SCEFitting
 rebuild. The older `SpinClusterMC.jl` (Monte Carlo) and `ActiveSCE.jl` (active learning)
 packages remain in use against the original `Magesty.jl` and are not targeted here.
 

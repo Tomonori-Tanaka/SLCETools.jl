@@ -6,7 +6,7 @@
 # per-atom magnetizations.
 
 using Test
-using MagestyRebuild
+using SCEFitting
 using SCETools
 using LinearAlgebra
 using Random

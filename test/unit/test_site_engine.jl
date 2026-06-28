@@ -5,7 +5,7 @@
 # the deterministic quadrature on a non-vMF (l=2 Bingham) field.
 
 using Test
-using MagestyRebuild
+using SCEFitting
 using SCETools
 using LinearAlgebra
 using Random

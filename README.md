@@ -1,7 +1,7 @@
 # SCETools.jl
 
 Auxiliary tooling around the spin-cluster-expansion (SCE) fitting core
-[`MagestyRebuild.jl`](../Magesty_rebuild.jl): utilities that **consume** a fitted
+[`SCEFitting.jl`](../SCEFitting.jl): utilities that **consume** a fitted
 `SCEModel` rather than build one.
 
 - **Mean-field (MFA) spin-configuration sampling** *(available)* — draw physically
@@ -24,7 +24,7 @@ Auxiliary tooling around the spin-cluster-expansion (SCE) fitting core
 ## Relationship to the ecosystem
 
 This package re-founds the sampling / active-learning layer on the clean
-`MagestyRebuild` rebuild. The older `SpinClusterMC.jl` (Monte Carlo) and `ActiveSCE.jl`
+`SCEFitting` rebuild. The older `SpinClusterMC.jl` (Monte Carlo) and `ActiveSCE.jl`
 (active learning) packages remain in use against the original `Magesty.jl` and are not
 targeted here.
 
@@ -34,22 +34,22 @@ Both packages are unregistered; develop the core by path:
 
 ```julia
 using Pkg
-Pkg.develop(path="../Magesty_rebuild.jl")   # the SCE fitting core
+Pkg.develop(path="../SCEFitting.jl")   # the SCE fitting core
 ```
 
 ## Usage
 
 ```julia
-using MagestyRebuild, SCETools
+using SCEFitting, SCETools
 
-model = …                                   # a fitted SCEModel (see MagestyRebuild)
+model = …                                   # a fitted SCEModel (see SCEFitting)
 ref   = …                                   # 3 × n_atoms reference directions (unit columns)
 s     = MFASampler(model; reference = ref)  # keep every channel (bilinear … many-body)
 samp  = sample(s, 0.6)                       # configurations at τ = 0.6
 ```
 
-The sampler reads the fitted Hamiltonian only through `MagestyRebuild`'s public surface
-(`multipole_terms`, `bilinear_terms`, `MagestyRebuild.Harmonics`), so it is insulated from
+The sampler reads the fitted Hamiltonian only through `SCEFitting`'s public surface
+(`multipole_terms`, `bilinear_terms`, `SCEFitting.Harmonics`), so it is insulated from
 the core's SALC-basis internals.
 
 ## Documentation
@@ -61,8 +61,8 @@ make -C docs serve      # build, then serve at http://localhost:8000 with live r
 make -C docs build      # build the static HTML into docs/build/
 ```
 
-The build is local-only (no published remote yet); `MagestyRebuild` must sit at
-`../Magesty_rebuild.jl`.
+The build is local-only (no published remote yet); `SCEFitting` must sit at
+`../SCEFitting.jl`.
 
 ## Tests
 
