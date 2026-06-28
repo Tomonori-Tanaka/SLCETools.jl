@@ -48,6 +48,18 @@ The sampler reads the fitted Hamiltonian only through `MagestyRebuild`'s public 
 (`multipole_terms`, `bilinear_terms`, `MagestyRebuild.Harmonics`), so it is insulated from
 the core's SALC-basis internals.
 
+## Documentation
+
+A Documenter site (Home, Getting started, Guide, Theory, API) lives under `docs/`:
+
+```bash
+make -C docs serve      # build, then serve at http://localhost:8000 with live reload
+make -C docs build      # build the static HTML into docs/build/
+```
+
+The build is local-only (no published remote yet); `MagestyRebuild` must sit at
+`../Magesty_rebuild.jl`.
+
 ## Tests
 
 ```bash
