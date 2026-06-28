@@ -1,0 +1,30 @@
+name = "SCETools"
+uuid = "77bd043c-7a11-43a2-98fa-bb6bc0462af0"
+authors = ["T.Tanaka <tomonori.tanaka.academic@gmail.com>"]
+version = "0.1.0"
+
+[deps]
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+MagestyRebuild = "854eb3e0-bd75-4c3b-927c-573f5c6d8b1d"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
+Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
+
+[compat]
+Aqua = "0.8"
+JET = "0.11"
+LinearAlgebra = "1"
+MagestyRebuild = "0.1"
+Random = "1"
+StaticArrays = "1.9"
+Statistics = "1"
+Test = "1"
+julia = "1.12"
+
+[extras]
+Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"
+JET = "c3a54625-cd67-489e-a8e7-0a5a0ff4e31b"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test", "Aqua", "JET"]
