@@ -27,3 +27,10 @@ The [`ExchangeModel`](@ref) / [`MultipoleField`](@ref) carriers are documented u
 [Exchange models](guide/exchange_models.md); the τ ↔ m helpers
 ([`thermal_averaged_m`](@ref), [`tau_from_magnetization`](@ref), [`mfa_sublattice_m`](@ref),
 [`mfa_temperature_scale`](@ref)) under [Sampling](guide/sampling.md).
+
+## VASP input writing
+
+The namespaced `SCETools.VASP` submodule
+([`write_inputs`](@ref SCETools.VASP.write_inputs),
+[`write_incar`](@ref SCETools.VASP.write_incar)) writes constrained-noncollinear VASP inputs
+from sampled configurations; see [VASP inputs](guide/dft_inputs.md).

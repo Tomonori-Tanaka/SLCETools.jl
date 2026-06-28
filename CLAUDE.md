@@ -57,6 +57,16 @@ Inherited from the core (`MagestyRebuild`'s `CLAUDE.md`); the ones this package 
   *forward* of the core's `_l1_pair_matrix` / `_l2_onsite_matrix` (tesseral → `3×3`). The
   bilinear extraction uses the core's (inverse) matrices via `bilinear_terms`; do not
   duplicate that delicate conversion here.
+- **`io/vasp.jl` (write) ↔ `MagestyRebuild.VASP` / `dftsource.jl` (read)**: the INCAR writer
+  must stay inverse-consistent with the reader. (1) **Atom order** — `_poscar_order` must
+  reproduce `write_poscar`'s species grouping exactly, or moments are silently misassigned to
+  atoms. (2) **SAXIS frame** — the writer rotates Cartesian → SAXIS by `Rᵀ`, the inverse of the
+  reader's `Rz(α)Ry(β)` (`_saxis_rotation` must match the reader's α/β); the *declared* SAXIS
+  line and the frame the moments are written in must always agree (template SAXIS is honoured /
+  overridden together). (3) **MAGMOM = magnitude · direction**, M_CONSTR == MAGMOM under
+  `constrain`. The gate is `test/unit/test_vasp_incar.jl` (round-trip, order, formatting). The
+  sampler gives only directions + an order parameter `m_a ∈ [0,1]`, **not** μ_B magnitudes — the
+  magnitudes are an external input.
 
 ## Tests
 

@@ -9,6 +9,7 @@ const TEST_MODE = get(ENV, "TEST_MODE", "default")
         include("unit/test_exchange.jl")
         include("unit/test_tensorial.jl")
         include("unit/test_multipole.jl")
+        include("unit/test_vasp_incar.jl")
     end
     if TEST_MODE in ("default", "all", "aqua")
         include("aqua.jl")

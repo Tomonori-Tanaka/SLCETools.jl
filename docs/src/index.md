@@ -45,6 +45,7 @@ The [`ExchangeModel`](@ref) carrier can be built by hand (raw couplings, or a TB
 | [Getting started](getting_started.md) | Install, then sample a Heisenberg dimer from a fitted model |
 | [Guide: sampling](guide/sampling.md) | The `sample` verb, the fidelity ladder, `MFASample`, the τ ↔ m helpers |
 | [Guide: exchange models](guide/exchange_models.md) | Building an `ExchangeModel` by hand or from a fitted `SCEModel` |
+| [Guide: VASP inputs](guide/dft_inputs.md) | Write constrained-noncollinear INCAR / input sets from sampled configurations |
 | [Theory: the mean-field sampler](theory/mfa.md) | The MFA decoupling, reduced temperature, vMF / Bingham single-site laws |
 | [API reference](api.md) | Every exported type and function |
 

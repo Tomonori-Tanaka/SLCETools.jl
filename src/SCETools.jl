@@ -41,6 +41,11 @@ include("sampling/mfa_sampler.jl")
 # `multipole_terms` / `bilinear_terms` introspection.
 include("sampling/sce_bridge.jl")
 
+# VASP input writing: sampled spin configurations → constrained-noncollinear INCAR / input
+# sets. Namespaced as `SCETools.VASP` (mirrors the reader-side `MagestyRebuild.VASP`), so it
+# does not grow the top-level export list.
+include("io/vasp.jl")
+
 # Mean-field spin-configuration sampling (docs/specs/mfa-sampling.md).
 export AbstractSampler, MFASampler, MFASample, ExchangeModel, MultipoleField, sample,
     mfa_temperature_scale, mfa_sublattice_m, thermal_averaged_m, tau_from_magnetization

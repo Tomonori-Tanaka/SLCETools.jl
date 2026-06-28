@@ -27,6 +27,8 @@ src/sampling/
   exchange.jl                # P2/P3: ExchangeModel + MultipoleField carriers, MFA self-consistency
   mfa_sampler.jl             # P1–P4: MFASampler / MFASample, the `sample` verb, dispatch
   sce_bridge.jl              # ExchangeModel / MultipoleField / MFASampler from a fitted SCEModel
+src/io/
+  vasp.jl                    # module SCETools.VASP: write_incar / write_inputs (constrained NCL)
 src/active_learning/         # planned (see below); empty until implemented
 ```
 
@@ -40,6 +42,15 @@ src/active_learning/         # planned (see below); empty until implemented
 Construction fidelity ladder: `MFASampler(reference)` (single global isotropic) →
 `MFASampler(ExchangeModel(...); reference)` (multi-sublattice isotropic / tensorial) →
 `MFASampler(model::SCEModel; reference)` (full multipole, all clusters and `l`).
+
+## Public API (VASP input writing — `SCETools.VASP`)
+
+`write_incar(path, directions; magmoms, base, constrain, saxis, …)` and
+`write_inputs(dir | rootdir, crystal, config | configs; …)` turn sampled spin directions into
+constrained-noncollinear VASP inputs (INCAR, or a POSCAR + INCAR input set / sweep). The writer
+is inverse-consistent with the reader-side `MagestyRebuild.VASP` (POSCAR atom order, SAXIS
+frame, MAGMOM / M_CONSTR layout). Moment magnitudes come from a per-atom vector, a scalar, a
+per-species map, or a template INCAR's MAGMOM.
 
 See `docs/specs/mfa-sampling.md` for the design (decisions D1–D5, phases P0–P4) and the
 physical conventions (`τ = T/T_MF`, `T_MF = ρ/3`, mean-field decoupling, vMF / Bingham).

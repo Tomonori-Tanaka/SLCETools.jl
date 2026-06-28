@@ -6,6 +6,28 @@ release, so everything lives under *Unreleased*.
 
 ## [Unreleased]
 
+### Added — VASP input writing (`SCETools.VASP`)
+
+Turn sampled spin configurations into constrained-noncollinear VASP inputs (the
+active-learning "label" step). Namespaced as `SCETools.VASP`, mirroring the reader-side
+`MagestyRebuild.VASP`.
+
+- **`write_incar(path, directions; magmoms, base, constrain, saxis, …)`** — write one INCAR.
+  The MAGMOM (and, under `constrain`, M_CONSTR) is `magnitude · direction` per atom, `%.9f`.
+  A `base` template (path or raw text) is preserved verbatim except for MAGMOM / M_CONSTR;
+  without one, a minimal noncollinear INCAR is written.
+- **`write_inputs(dir, crystal, config; …)` / `write_inputs(rootdir, crystal, configs; …)`** —
+  write a full input set (POSCAR via `MagestyRebuild.VASP.write_poscar` + a matching INCAR), or
+  a sweep with one subdirectory per configuration. The INCAR's atom order is regrouped by
+  species to match the POSCAR, so the two files are always consistent.
+- **Moment magnitudes** (μ_B — the sampler only gives directions) come from a per-atom vector, a
+  scalar, a per-species `label => magnitude` map, or the `base` template's MAGMOM norms.
+- **SAXIS** — moments are written in the global Cartesian frame by default; a non-default axis
+  (from the `saxis` kwarg or the template) writes them in the SAXIS frame, the inverse of the
+  reader's `Rz(α)Ry(β)`, so a write → read round-trip is the identity.
+- Guards: non-negative magnitudes, atom-count / direction-norm checks, and a typo'd template
+  path errors instead of being embedded as a stray line. Adds the `Printf` stdlib dependency.
+
 ### Added — initial package: the mean-field spin-configuration sampler
 
 Extracted from `MagestyRebuild.jl` (where it was developed as phases P0–P4) into this
