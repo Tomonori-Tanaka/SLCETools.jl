@@ -2,7 +2,8 @@
     SCETools
 
 Auxiliary tooling around the spin-cluster-expansion (SCE) fitting core
-[`MagestyRebuild`](https://github.com/…): utilities that *consume* a fitted `SCEModel`
+[`MagestyRebuild`](https://github.com/Tomonori-Tanaka/Magesty_rebuild.jl): utilities that
+*consume* a fitted `SCEModel`
 rather than build one. The first component is the **mean-field (MFA) spin-configuration
 sampler** — draw physically representative finite-temperature spin configurations from the
 single-site mean field of a fitted model (or a hand-built exchange model) at a controlled
