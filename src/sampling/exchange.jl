@@ -38,7 +38,7 @@ const _B2 = sqrt(5 / (16π))
 """
     ExchangeModel(Jiso; onsite = nothing)
     ExchangeModel(bilinear; onsite = nothing)
-    ExchangeModel(model::SCEModel)
+    ExchangeModel(model::SCEPredictor)
 
 Neutral carrier of the bilinear exchange (and single-ion anisotropy) the mean-field
 sampler needs.
@@ -51,7 +51,7 @@ sampler needs.
   exchange: `bilinear[a,b] = S_ab` with `bilinear[b,a] ≈ S_ab'` (the field is
   `g_a = Σ_b S_ab ⟨e_b⟩`); the symmetric/antisymmetric parts carry anisotropic / DM
   exchange.
-- `ExchangeModel(model)` — extract `bilinear` and `onsite` from a fitted `SCEModel`
+- `ExchangeModel(model)` — extract `bilinear` and `onsite` from a fitted `SCEPredictor`
   by reusing the core's bilinear (`ls=[1,1]`) and single-ion (`ls=[2]`) extraction; only the
   higher-order / higher-`l` channels are dropped (a P4 extension) and reported via `@warn`.
 """
@@ -368,7 +368,7 @@ end
 
 The digested full-multipole mean field of a fitted SCE (P4): every cluster term
 (`_MFATerm`), the `lmax`, and the bilinear [`ExchangeModel`](@ref) (used only for the
-`l=1` temperature scale `ρ`). Built by `MultipoleField(model::SCEModel)`; consumed by the
+`l=1` temperature scale `ρ`). Built by `MultipoleField(model::SCEPredictor)`; consumed by the
 [`MFASampler`](@ref) tensorial/Metropolis path.
 """
 struct MultipoleField

@@ -1,7 +1,7 @@
 # SPEC — SCETools.jl
 
 Auxiliary tooling around the SCE fitting core `SCEFitting.jl`. Components **consume** a
-fitted `SCEModel` (or a hand-built exchange model); they never build or fit one. This file
+fitted `SCEPredictor` (or a hand-built exchange model); they never build or fit one. This file
 records the realized architecture and the planned active-learning layer.
 
 ## Dependency boundary
@@ -13,9 +13,9 @@ surface:
   (raw `jϕ` coefficient, `body`, `atoms`, `shifts`, `ls`, `folded`).
 - `bilinear_terms(model) :: (; pairs, onsites, skipped)` — the bilinear (`ls=[1,1]`) /
   single-ion (`ls=[2]`) channels as Cartesian `3×3` matrices.
-- `num_atoms(model)` and the tesseral submodule `SCEFitting.Harmonics` (`Zlm`, `lm_index`).
+- `n_atoms(model)` and the tesseral submodule `SCEFitting.Harmonics` (`Zlm`, `lm_index`).
 
-It never touches the SALC-basis internals (`model.basis.salcs.salcs`, `SALCMember`,
+It never touches the SALC-basis internals (`model.basis.salc_basis.salcs`, `SALCMember`,
 `SALCTerm`). The development dependency is a path-dev (`Pkg.develop(path="../SCEFitting.jl")`).
 
 ## Module layout
@@ -26,7 +26,7 @@ src/sampling/
   site_engine.jl             # P0: single-site potential, vMF / Metropolis draws, quadrature
   exchange.jl                # P2/P3: ExchangeModel + MultipoleField carriers, MFA self-consistency
   mfa_sampler.jl             # P1–P4: MFASampler / MFASample, the `sample` verb, dispatch
-  sce_bridge.jl              # ExchangeModel / MultipoleField / MFASampler from a fitted SCEModel
+  sce_bridge.jl              # ExchangeModel / MultipoleField / MFASampler from a fitted SCEPredictor
 src/io/
   vasp.jl                    # module SCETools.VASP: the VASP adapter — read (read_poscar /
                              #   Oszicar) + write (write_poscar / write_incar / write_inputs)
@@ -46,7 +46,7 @@ POSCAR / OSZICAR parsers bit-for-bit against Magesty; run with
 
 Construction fidelity ladder: `MFASampler(reference)` (single global isotropic) →
 `MFASampler(ExchangeModel(...); reference)` (multi-sublattice isotropic / tensorial) →
-`MFASampler(model::SCEModel; reference)` (full multipole, all clusters and `l`).
+`MFASampler(model::SCEPredictor; reference)` (full multipole, all clusters and `l`).
 
 ## Public API (VASP I/O — `SCETools.VASP`)
 

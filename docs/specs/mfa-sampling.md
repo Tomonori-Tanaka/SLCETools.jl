@@ -105,7 +105,7 @@ AbstractSampler            # dispatch seam; future Metropolis-MC / spin-spiral s
  └─ MFASampler             # single-site mean-field sampler (this spec)
 
 ExchangeModel              # neutral bilinear+single-ion carrier (tensorial 𝓙_ij, A_i)
- ├─ from an SCEModel       # isotropic+DMI+anisotropic bilinear via the to_sunny extraction; single-ion via ls=[2]
+ ├─ from an SCEPredictor       # isotropic+DMI+anisotropic bilinear via the to_sunny extraction; single-ion via ls=[2]
  └─ from external Jij      # (i, j, R, 𝓙::SMatrix{3,3}) lists (Lichtenstein / TB2J)
 
 sample(sampler; …) -> configs    # the one verb; returns 3×n_atoms unit-direction matrices
@@ -118,7 +118,7 @@ Three sampler constructions, increasing in fidelity:
 2. `MFASampler(exch::ExchangeModel; reference)` — per-sublattice MFA on a tensorial
    bilinear + single-ion model. Covers external `Jij` and the bilinear truncation of
    an SCE.
-3. `MFASampler(model::SCEModel; reference)` — full multipole MFA over **all** SCE
+3. `MFASampler(model::SCEPredictor; reference)` — full multipole MFA over **all** SCE
    clusters and harmonic orders (higher-order / many-body). The most faithful; only
    the SCE source carries the higher-`l` structure.
 
@@ -135,7 +135,7 @@ quadrature (accurate), and the final configuration draws use the engine above.
 
 - **`to_sunny` / `_l1_pair_matrix` / `_l2_onsite_matrix`** already extract the full
   3×3 per-bond bilinear matrix (iso + DMI + anisotropic) and the single-ion matrix
-  from an `SCEModel`. `ExchangeModel(model)` is essentially that extraction without
+  from an `SCEPredictor`. `ExchangeModel(model)` is essentially that extraction without
   the Sunny assembly.
 - **`evaluate` / `accumulate_grad!`** (the folded-tensor contraction kernels) compute
   `h_a^{lm}` by contracting `folded` against neighbor multipoles `⟨Z_b⟩` while leaving
@@ -221,7 +221,7 @@ independently from `P(e_a) ∝ exp(−β H_a^MF(e_a))` via the `:vmf` fast path
 
 ## 5. Sources and I/O
 
-- **SCE model → `ExchangeModel` / direct `SCEModel` sampler.** The “simple SCE near a
+- **SCE model → `ExchangeModel` / direct `SCEPredictor` sampler.** The “simple SCE near a
   reference state” path. Bilinear extraction reuses `to_sunny`; full multipole uses
   the model directly.
 - **External `Jij` → `ExchangeModel`.** A neutral `(i, j, R, 𝓙::SMatrix{3,3})` +
@@ -375,7 +375,7 @@ All resolved. Conservative, exactness-leaning defaults with opt-in escapes/exten
       harmonic left symbolic). The order parameters are the **full per-atom multipole
       averages `⟨Z_lm⟩_a`** (`l ≤ lmax`), iterated to self-consistency by quadrature;
       `β = 3/(ρτ)` with `ρ` the `l=1` (bilinear) Perron; the draw is Metropolis.
-      `MFASampler(model::SCEModel; reference)` is the user entry. Validated by the exact
+      `MFASampler(model::SCEPredictor; reference)` is the user entry. Validated by the exact
       reduction to the single-global Langevin curve for a pure-bilinear model, scale
       invariance, and — the headline — the many-body factorization checked against the
       conditional mean SCE energy `⟨E|e_a⟩` of a biquadratic model (matches to ~MC noise;

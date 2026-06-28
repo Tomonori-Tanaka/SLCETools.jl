@@ -28,7 +28,7 @@ write(joinpath(dir, "POSCAR"),
       "Fe2\n1.0\n 2.5 0 0\n 0 2.5 0\n 0 0 2.5\nFe\n2\nDirect\n 0 0 0\n 0.5 0.5 0.5\n")
 
 crystal = read_poscar(joinpath(dir, "POSCAR"))            # → Crystal
-(num_atoms(crystal), crystal.species_labels)
+(n_atoms(crystal), crystal.species_labels)
 ```
 
 An [`Oszicar`](@ref SCETools.VASP.Oszicar) wraps one or more constrained-noncollinear OSZICAR

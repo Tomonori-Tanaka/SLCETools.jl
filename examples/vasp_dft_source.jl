@@ -20,7 +20,7 @@ dir = mktempdir()
 write(joinpath(dir, "POSCAR"),
       "Fe2\n1.0\n 2.5 0 0\n 0 2.5 0\n 0 0 2.5\nFe\n2\nDirect\n 0 0 0\n 0.5 0.5 0.5\n")
 crystal = read_poscar(joinpath(dir, "POSCAR"))
-println("read_poscar → ", num_atoms(crystal), " atoms, species ", crystal.species_labels)
+println("read_poscar → ", n_atoms(crystal), " atoms, species ", crystal.species_labels)
 
 # --- a few constrained-noncollinear OSZICARs (stand-ins for real runs) -----------
 function write_oszicar(path; energy, moments, field)
@@ -61,5 +61,5 @@ println("  torque target τ_a = −m_a×B_a (eV), atom 1 = ", round.(d.torques[:
 basis = SCEBasis(crystal, Interaction(; nbody = 2, pair_cutoff = 2.5, lmax = [1], isotropy = true))
 dataset = SCEDataset(basis, src)                         # source → dataset (read under the hood)
 f = fit(SCEFit, dataset, OLS(); torque_weight = 0.3)
-println("\nfit completed on ", nobs(f), " configs, ", nsalc(basis), " coefficient(s)")
+println("\nfit completed on ", nobs(f), " configs, ", n_salcs(basis), " coefficient(s)")
 println("✓ the SCE pipeline saw only SpinDatum / SCEDataset — the VASP origin never entered it")

@@ -32,7 +32,7 @@ end
         p = _write(dir, "POSCAR5",
             "FePt\n1.0\n 3.0 0.0 0.0\n 0.0 3.0 0.0\n 0.0 0.0 4.0\nFe Pt\n1 1\nDirect\n 0.0 0.0 0.0\n 0.5 0.5 0.5\n")
         c = read_poscar(p)
-        @test num_atoms(c) == 2
+        @test n_atoms(c) == 2
         @test c.species == [1, 2]
         @test c.species_labels == ["Fe", "Pt"]
         @test c.lattice.vectors == SMatrix{3,3,Float64}([3 0 0; 0 3 0; 0 0 4])  # columns = vectors

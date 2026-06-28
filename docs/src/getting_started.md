@@ -37,7 +37,7 @@ basis = SCEBasis(chain, Interaction(; nbody = 2, pair_cutoff = 2.6, lmax = [1], 
 
 # A fitted model: one Heisenberg SALC, a negative coefficient ⇒ ferromagnetic along the
 # reference. (In practice `jphi` comes from `fit`; here we just set it.)
-model = SCEModel(basis, 0.0, [-0.02], basis.salcs.keys)
+model = SCEPredictor(basis, 0.0, [-0.02], basis.salc_basis.keys)
 nothing # hide
 ```
 
@@ -93,5 +93,5 @@ m_at = thermal_averaged_m(0.5)                 # m(τ = 0.5) from the Langevin s
 - [Sampling](guide/sampling.md) — the `sample` verb in full, the fidelity ladder, and the
   `MFASample` output.
 - [Exchange models](guide/exchange_models.md) — build an `ExchangeModel` by hand (Heisenberg,
-  DMI, anisotropic, single-ion) or extract one from a fitted `SCEModel`.
+  DMI, anisotropic, single-ion) or extract one from a fitted `SCEPredictor`.
 - [Theory](theory/mfa.md) — the mean-field decoupling and the single-site distributions.

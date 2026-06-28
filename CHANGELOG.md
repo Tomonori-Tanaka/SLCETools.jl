@@ -6,6 +6,14 @@ release, so everything lives under *Unreleased*.
 
 ## [Unreleased]
 
+### Changed — follow the `SCEFitting` public-API rename
+
+Track `SCEFitting`'s breaking public-API rename: the bridge and VASP adapter now use
+`SCEPredictor` (was `SCEModel`), `n_atoms` (was `num_atoms`), `n_salcs` (was `nsalc`), and the
+`SCEBasis.salc_basis` field (was `.salcs`). No change to `SCETools`' own exported names — a
+caller passing a fitted model into `MFASampler` / `ExchangeModel` / `MultipoleField` is
+unaffected; only the internal import names moved.
+
 ### Changed — fitting-core dependency renamed `MagestyRebuild` → `SCEFitting`
 
 The fitting core this package builds on was renamed from `MagestyRebuild`
@@ -69,7 +77,7 @@ introspection surface (`multipole_terms`, `bilinear_terms`, `SCEFitting.Harmonic
   bilinear tensor `S_ab` (Heisenberg + DMI + anisotropic) and single-ion `A_a`, the
   single-site potential `V_a(e) = β(e·g_a + e' A_a e)` whose `l=2` Bingham factor the vMF
   cannot represent, solved as `m_a = ⟨e·ê_a⟩` by quadrature and drawn by Metropolis.
-- **P4 — full multipole / many-body** (`MultipoleField` / `MFASampler(model::SCEModel)`):
+- **P4 — full multipole / many-body** (`MultipoleField` / `MFASampler(model::SCEPredictor)`):
   the mean field over **all** SCE clusters and harmonic orders, with the generalized
   molecular field `h_a^{lm} = Σ_φ jφ·(4π)^(N/2)·folded·∏_{b≠a} ⟨Z_b⟩` and per-atom multipole
   averages `⟨Z_lm⟩_a` iterated to self-consistency.

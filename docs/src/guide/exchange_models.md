@@ -7,7 +7,7 @@ CurrentModule = SCETools
 [`ExchangeModel`](@ref) is the neutral carrier of the **bilinear** exchange (and single-ion
 anisotropy) the mean-field sampler needs. [`MultipoleField`](@ref) is its higher-order
 generalization, keeping **all** SCE channels. Both can be built by hand or extracted from a
-fitted `SCEModel`.
+fitted `SCEPredictor`.
 
 ## Building an `ExchangeModel` by hand
 
@@ -49,7 +49,7 @@ A purely isotropic model (`isotropic = true`) takes the fast closed-form von Mis
 path; any DMI, anisotropic, or single-ion content switches the sampler to the Bingham /
 Metropolis path automatically.
 
-## Extracting from a fitted `SCEModel`
+## Extracting from a fitted `SCEPredictor`
 
 The bilinear and single-ion channels of a fitted model fold into an `ExchangeModel`:
 

@@ -2,7 +2,7 @@
 
 Auxiliary tooling around the spin-cluster-expansion (SCE) fitting core
 [`SCEFitting.jl`](../SCEFitting.jl): utilities that **consume** a fitted
-`SCEModel` rather than build one.
+`SCEPredictor` rather than build one.
 
 - **Mean-field (MFA) spin-configuration sampling** *(available)* — draw physically
   representative finite-temperature spin configurations from the single-site mean field of
@@ -11,7 +11,7 @@ Auxiliary tooling around the spin-cluster-expansion (SCE) fitting core
   - `MFASampler(reference)` — a single global isotropic sampler (Langevin / von Mises–Fisher);
   - `MFASampler(ExchangeModel(...); reference)` — multi-sublattice isotropic and tensorial
     (Heisenberg / DMI / anisotropic exchange + single-ion);
-  - `MFASampler(model::SCEModel; reference)` — the full multipole sampler from a fitted
+  - `MFASampler(model::SCEPredictor; reference)` — the full multipole sampler from a fitted
     model (all clusters and `l`, higher-order / many-body).
 - **VASP I/O** *(available)* — `SCETools.VASP` is the concrete VASP adapter (the fitting core
   keeps only the abstract DFT-data seam): **read** training data (`read_poscar`, `Oszicar` →
@@ -42,7 +42,7 @@ Pkg.develop(path="../SCEFitting.jl")   # the SCE fitting core
 ```julia
 using SCEFitting, SCETools
 
-model = …                                   # a fitted SCEModel (see SCEFitting)
+model = …                                   # a fitted SCEPredictor (see SCEFitting)
 ref   = …                                   # 3 × n_atoms reference directions (unit columns)
 s     = MFASampler(model; reference = ref)  # keep every channel (bilinear … many-body)
 samp  = sample(s, 0.6)                       # configurations at τ = 0.6

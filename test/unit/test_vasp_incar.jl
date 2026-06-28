@@ -127,8 +127,8 @@ _unit(v) = v / norm(v)
         reloaded = V.read_poscar(joinpath(dir, "POSCAR"))
         perm = V._poscar_order(cr)                            # POSCAR atom k ← model atom perm[k]
         permmag = [Dict("A" => 3.0, "B" => 1.0)[cr.species_labels[cr.species[a]]] for a in perm]
-        M = reshape(incar_floats(joinpath(dir, "INCAR"), "MAGMOM"), 3, num_atoms(cr))
-        for k = 1:num_atoms(cr)
+        M = reshape(incar_floats(joinpath(dir, "INCAR"), "MAGMOM"), 3, n_atoms(cr))
+        for k = 1:n_atoms(cr)
             @test M[:, k] ≈ permmag[k] .* cfg[:, perm[k]] atol = 1e-9
         end
     end

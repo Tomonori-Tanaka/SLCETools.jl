@@ -14,7 +14,7 @@ one verb, [`sample`](@ref), and a ladder of [`MFASampler`](@ref) constructions.
 MFASampler(reference)                              # single global magnetization
 MFASampler(ExchangeModel(Jiso); reference)         # multi-sublattice isotropic
 MFASampler(ExchangeModel(bilinear; onsite); reference)   # tensorial + single-ion
-MFASampler(model::SCEModel; reference)             # full multipole (all clusters / l)
+MFASampler(model::SCEPredictor; reference)             # full multipole (all clusters / l)
 ```
 
 `reference` is a `3 × n_atoms` matrix of **unit-column** reference directions

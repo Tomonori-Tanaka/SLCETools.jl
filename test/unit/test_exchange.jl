@@ -111,7 +111,7 @@ end
         lat = Lattice([8.0 0 0; 0 8.0 0; 0 0 10.0])
         cr = Crystal(lat, [0 0 0 0; 0 0 0 0; 0.0 0.25 0.5 0.75], [1, 1, 1, 1], ["Fe"])
         b = SCEBasis(cr, Interaction(; nbody = 2, pair_cutoff = 2.6, lmax = [1], isotropy = true))
-        model = SCEModel(b, 0.0, [0.0137], b.salcs.keys)
+        model = SCEPredictor(b, 0.0, [0.0137], b.salc_basis.keys)
         ex = ExchangeModel(model)
         @test ex.natoms == 4
         @test ex.Jiso ≈ ex.Jiso'                                   # symmetric
@@ -143,14 +143,14 @@ end
         # a single-ion (ls=[2]) model: now extracted into onsite (tensorial), not dropped
         cr1 = Crystal(lat, reshape([0.0, 0, 0], 3, 1), [1], ["Fe"])
         b1 = SCEBasis(cr1, Interaction(; nbody = 1, pair_cutoff = 1.5, lmax = [2], isotropy = false))
-        m1 = SCEModel(b1, 0.0, ones(nsalc(b1)), b1.salcs.keys)
+        m1 = SCEPredictor(b1, 0.0, ones(n_salcs(b1)), b1.salc_basis.keys)
         ex1 = ExchangeModel(m1)
         @test !ex1.isotropic
         @test norm(ex1.onsite[1]) > 0
         # higher-l 2-body channels ([1,2], [2,2]) are unsupported and reported
         cr2 = Crystal(lat, [0.2 -0.2; 0.0 0.0; 0.0 0.0], [1, 1], ["Fe"])
         b2 = SCEBasis(cr2, Interaction(; nbody = 2, pair_cutoff = 1.5, lmax = [2], isotropy = false))
-        m2 = SCEModel(b2, 0.0, ones(nsalc(b2)), b2.salcs.keys)
+        m2 = SCEPredictor(b2, 0.0, ones(n_salcs(b2)), b2.salc_basis.keys)
         @test_logs (:warn,) ExchangeModel(m2)
     end
 

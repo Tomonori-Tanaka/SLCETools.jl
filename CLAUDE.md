@@ -8,7 +8,7 @@
 
 Auxiliary tooling around the SCE fitting core
 [`SCEFitting.jl`](../SCEFitting.jl): utilities that **consume** a fitted
-`SCEModel` rather than build one. The first component is the **mean-field (MFA)
+`SCEPredictor` rather than build one. The first component is the **mean-field (MFA)
 spin-configuration sampler** — draw physically representative finite-temperature spin
 configurations from the single-site mean field of a fitted model (or a hand-built
 exchange model) at a controlled reduced temperature `τ = T/T_MF`. Future components
@@ -18,9 +18,9 @@ core (this package never re-derives them — it reads the fitted Hamiltonian thr
 core's public surface).
 
 This package depends on `SCEFitting` and reads a fitted model **only** through its
-public introspection surface — `multipole_terms`, `bilinear_terms`, `num_atoms(model)`,
+public introspection surface — `multipole_terms`, `bilinear_terms`, `n_atoms(model)`,
 and the tesseral spherical-harmonic submodule `SCEFitting.Harmonics` (`Zlm`,
-`lm_index`) — never the SALC-basis internals (`model.basis.salcs.salcs`, `SALCMember`,
+`lm_index`) — never the SALC-basis internals (`model.basis.salc_basis.salcs`, `SALCMember`,
 `SALCTerm`). During development the dependency is a path-dev:
 `Pkg.develop(path="../SCEFitting.jl")`.
 

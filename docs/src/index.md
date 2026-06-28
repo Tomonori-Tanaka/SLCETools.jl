@@ -6,7 +6,7 @@ CurrentModule = SCETools
 
 Auxiliary tooling around the spin-cluster-expansion (SCE) fitting core
 [SCEFitting.jl](https://github.com/Tomonori-Tanaka/SCEFitting.jl) — utilities that
-**consume** a fitted `SCEModel` rather than build one.
+**consume** a fitted `SCEPredictor` rather than build one.
 
 The first component is the **mean-field (MFA) spin-configuration sampler**: draw physically
 representative finite-temperature spin configurations from the single-site mean field of a
@@ -18,7 +18,7 @@ together.
 !!! note "Status — companion to an architectural exploration (v0)"
     SCETools depends on SCEFitting and reads a fitted model **only** through its public
     introspection surface — [`multipole_terms`](https://github.com/Tomonori-Tanaka/SCEFitting.jl),
-    `bilinear_terms`, `num_atoms`, and the tesseral submodule `SCEFitting.Harmonics` —
+    `bilinear_terms`, `n_atoms`, and the tesseral submodule `SCEFitting.Harmonics` —
     never its SALC-basis internals. The sampler was developed inside SCEFitting (phases
     P0–P4) and extracted here when the core was narrowed to fitting only.
 
@@ -32,10 +32,10 @@ fidelity:
 | `MFASampler(reference)` | a single global magnetization | Langevin / von Mises–Fisher |
 | `MFASampler(ExchangeModel(Jiso); reference)` | multi-sublattice isotropic (Heisenberg) exchange | per-atom von Mises–Fisher |
 | `MFASampler(ExchangeModel(bilinear; onsite); reference)` | tensorial exchange (DMI + anisotropic) + single-ion | von Mises–Fisher / Bingham (Metropolis) |
-| `MFASampler(model::SCEModel; reference)` | **all** SCE clusters and `l` — higher-order / many-body | full multipole (Metropolis) |
+| `MFASampler(model::SCEPredictor; reference)` | **all** SCE clusters and `l` — higher-order / many-body | full multipole (Metropolis) |
 
 The [`ExchangeModel`](@ref) carrier can be built by hand (raw couplings, or a TB2J-style
-``J_{ij}`` tensor) or extracted from a fitted `SCEModel`; the full
+``J_{ij}`` tensor) or extracted from a fitted `SCEPredictor`; the full
 [`MultipoleField`](@ref) path keeps every channel.
 
 ## Documentation
@@ -44,7 +44,7 @@ The [`ExchangeModel`](@ref) carrier can be built by hand (raw couplings, or a TB
 |------|--------------|
 | [Getting started](getting_started.md) | Install, then sample a Heisenberg dimer from a fitted model |
 | [Guide: sampling](guide/sampling.md) | The `sample` verb, the fidelity ladder, `MFASample`, the τ ↔ m helpers |
-| [Guide: exchange models](guide/exchange_models.md) | Building an `ExchangeModel` by hand or from a fitted `SCEModel` |
+| [Guide: exchange models](guide/exchange_models.md) | Building an `ExchangeModel` by hand or from a fitted `SCEPredictor` |
 | [Guide: VASP I/O](guide/vasp.md) | Read DFT training data (POSCAR / OSZICAR) and write constrained-noncollinear INCAR / input sets |
 | [Theory: the mean-field sampler](theory/mfa.md) | The MFA decoupling, reduced temperature, vMF / Bingham single-site laws |
 | [API reference](api.md) | Every exported type and function |

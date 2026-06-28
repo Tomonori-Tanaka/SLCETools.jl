@@ -3,7 +3,7 @@
 
 Auxiliary tooling around the spin-cluster-expansion (SCE) fitting core
 [`SCEFitting`](https://github.com/Tomonori-Tanaka/SCEFitting.jl): utilities that
-*consume* a fitted `SCEModel`
+*consume* a fitted `SCEPredictor`
 rather than build one. The first component is the **mean-field (MFA) spin-configuration
 sampler** — draw physically representative finite-temperature spin configurations from the
 single-site mean field of a fitted model (or a hand-built exchange model) at a controlled
@@ -28,7 +28,7 @@ using Random: AbstractRNG, default_rng
 # core's tesseral spherical-harmonic kernel, imported so the moved sampler files keep their
 # `Harmonics.Zlm` / `Harmonics.lm_index` calls unchanged.
 import SCEFitting.Harmonics
-using SCEFitting: SCEModel, num_atoms, multipole_terms, MultipoleTerm, bilinear_terms
+using SCEFitting: SCEPredictor, n_atoms, multipole_terms, MultipoleTerm, bilinear_terms
 
 # --- mean-field spin-configuration sampling (docs/specs/mfa-sampling.md) ---
 # P0: the single-site engine (potential, vMF / Metropolis draws, sphere quadrature).
