@@ -13,9 +13,10 @@ Auxiliary tooling around the spin-cluster-expansion (SCE) fitting core
     (Heisenberg / DMI / anisotropic exchange + single-ion);
   - `MFASampler(model::SCEModel; reference)` — the full multipole sampler from a fitted
     model (all clusters and `l`, higher-order / many-body).
-- **VASP input writing** *(available)* — `SCETools.VASP.write_incar` / `write_inputs` turn
-  sampled configurations into constrained-noncollinear VASP inputs (INCAR, or a POSCAR + INCAR
-  input set / sweep), inverse-consistent with the `MagestyRebuild.VASP` reader.
+- **VASP I/O** *(available)* — `SCETools.VASP` is the concrete VASP adapter (the fitting core
+  keeps only the abstract DFT-data seam): **read** training data (`read_poscar`, `Oszicar` →
+  `SpinDatum`) and **write** constrained-noncollinear inputs from sampled configurations
+  (`write_incar` / `write_inputs`). Read and write share one frame / format convention.
 - **Active learning** *(planned)* — an efficient model-construction loop that proposes
   configurations (via the sampler), labels them with DFT, and refits the SCE model. See
   `SPEC.md`.

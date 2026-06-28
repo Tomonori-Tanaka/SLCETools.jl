@@ -1,41 +1,298 @@
-# VASP input writing — turn sampled spin configurations into constrained-noncollinear VASP
-# inputs (see the active-learning "label" step). Namespaced as `SCETools.VASP`, mirroring the
-# reader-side `MagestyRebuild.VASP`. A sampler produces unit spin *directions*; the moment
-# *magnitudes* (μ_B) come from elsewhere — a template INCAR's existing MAGMOM (each atom's
-# norm), a per-species map, or an explicit per-atom vector.
+# VASP I/O — the code-specific adapter for the VASP DFT code, kept out of the code-agnostic
+# fitting core. The core (`MagestyRebuild`) owns only the abstract DFT-data seam
+# (`AbstractDFTSource` / `SpinDatum` / `read_configs` / `SCEDataset`); this module provides the
+# concrete VASP reader and writer:
 #
-# Conventions (matched to `MagestyRebuild.VASP`'s reader):
-#   - MAGMOM / M_CONSTR carry full 3-component vectors per atom, `%.9f`, written in the
-#     **global Cartesian** frame for the default `SAXIS = [0,0,1]`; for a non-default SAXIS the
-#     vectors are rotated *out* of Cartesian by `Rᵀ` (the inverse of the reader's `Rz(α)Ry(β)`).
-#   - The atom order of MAGMOM / M_CONSTR must match the POSCAR. `write_inputs` writes both and
-#     orders the moments to match `MagestyRebuild.VASP.write_poscar` (atoms grouped by species
-#     in `species_labels` order).
+#   - read:  `read_poscar` (POSCAR → Crystal), `Oszicar` (constrained-noncollinear OSZICARs →
+#            SpinDatum via the `AbstractDFTSource` / `read_configs` seam) — produces training data.
+#   - write: `write_poscar` (Crystal → POSCAR), `write_incar` / `write_inputs` (sampled spin
+#            directions → constrained-noncollinear INCAR / input sets) — produces DFT jobs.
+#
+# Conventions follow VASP and Magesty.jl: the POSCAR scaling factor is a length scale (or, if
+# negative, a target cell volume); the OSZICAR moment is the `MW_int` column (or `M_int` with
+# `mint = true`) and the constraining field is `lambda*MW_perp`; both are rotated between the
+# `SAXIS` quantization frame and Cartesian by `Rz(α)·Ry(β)` (read) / its inverse `Rᵀ` (write), so
+# a write → read round-trip is the identity. The torque target is `τ_a = m_a × B_a` (eV).
+# MAGMOM / M_CONSTR carry full 3-component vectors per atom (`%.9f`), and their atom order must
+# match the POSCAR (atoms grouped by species in `species_labels` order — `write_inputs` handles
+# this). A second DFT code is one more sibling adapter; the core does not change.
 module VASP
 
 using Printf
-using LinearAlgebra: norm
-import MagestyRebuild
-using MagestyRebuild: Crystal, num_atoms
+using StaticArrays
+using LinearAlgebra: norm, det
+using MagestyRebuild: Crystal, Lattice, AbstractDFTSource, SpinDatum, num_atoms
+import MagestyRebuild: read_configs
 
-export write_incar, write_inputs
+export read_poscar, write_poscar, Oszicar, write_incar, write_inputs
 
 # --- SAXIS frame -------------------------------------------------------------------------
 
 _is_default_saxis(s) = s[1] == 0 && s[2] == 0 && s[3] == 1
 
-# The reader rotates moments from the SAXIS frame to Cartesian by R = Rz(α)·Ry(β); the writer
-# rotates Cartesian → SAXIS by Rᵀ, so a write→read round-trip is the identity.
-function _saxis_rotation(s)
+# The SAXIS quantization-axis rotation R = Rz(α)·Ry(β), α/β the azimuth/polar of `saxis`. The
+# reader rotates moments from the SAXIS frame to Cartesian by R; the writer rotates Cartesian →
+# SAXIS by Rᵀ (= R⁻¹), so a write → read round-trip is the identity.
+function _saxis_rotation(s)::SMatrix{3,3,Float64,9}
     sx, sy, sz = float(s[1]), float(s[2]), float(s[3])
+    n = sqrt(sx^2 + sy^2 + sz^2)
+    (isfinite(n) && n > 0) ||
+        throw(ArgumentError("saxis must be a nonzero, finite vector; got $s"))
     α = atan(sy, sx)
     β = atan(hypot(sx, sy), sz)
-    Rz = [cos(α) -sin(α) 0.0; sin(α) cos(α) 0.0; 0.0 0.0 1.0]
-    Ry = [cos(β) 0.0 sin(β); 0.0 1.0 0.0; -sin(β) 0.0 cos(β)]
+    Rz = @SMatrix [cos(α) -sin(α) 0.0; sin(α) cos(α) 0.0; 0.0 0.0 1.0]
+    Ry = @SMatrix [cos(β) 0.0 sin(β); 0.0 1.0 0.0; -sin(β) 0.0 cos(β)]
     return Rz * Ry
 end
 
-# --- moment vectors ----------------------------------------------------------------------
+# Do two SAXIS vectors point the same way (the magnitude is irrelevant — only the axis matters)?
+_saxis_approx(a, b) = isapprox(collect(float.(a)) ./ norm(float.(collect(a))),
+                              collect(float.(b)) ./ norm(float.(collect(b))); atol = 1e-8)
+
+# ── POSCAR ────────────────────────────────────────────────────────────────────────────
+
+"""
+    SCETools.VASP.read_poscar(path) -> Crystal
+
+Read a VASP POSCAR/CONTCAR file into a `Crystal`. Handles the scaling factor (a length scale,
+or a target volume when negative), `Direct`/`Cartesian` coordinates, the optional
+`Selective dynamics` line, and POSCAR files with or without the element-symbol line
+(synthesizing `"X1", "X2", …` when it is absent). Each of the three lattice lines is one lattice
+vector (a column of `Lattice.vectors`).
+"""
+function read_poscar(path::AbstractString)::Crystal
+    isfile(path) || throw(ArgumentError("POSCAR not found: $path"))
+    lines = readlines(path)
+    length(lines) >= 8 || throw(ArgumentError("POSCAR is too short to be valid"))
+
+    scale = tryparse(Float64, strip(lines[2]))
+    scale === nothing && throw(ArgumentError("invalid POSCAR scaling factor: $(lines[2])"))
+
+    A_raw = MMatrix{3,3,Float64}(undef)
+    for i = 1:3
+        toks = split(strip(lines[2 + i]))
+        length(toks) >= 3 || throw(ArgumentError("bad lattice vector on line $(2 + i)"))
+        for j = 1:3
+            A_raw[j, i] = parse(Float64, toks[j])   # column i = i-th lattice vector
+        end
+    end
+    # Negative scale = target volume (VASP convention); otherwise a plain length scale.
+    s = scale >= 0 ? scale : cbrt(abs(scale) / abs(det(SMatrix(A_raw))))
+    A = SMatrix(A_raw) .* s
+
+    toks6 = split(strip(lines[6]))
+    counts = map(t -> tryparse(Int, t), toks6)
+    local labels::Vector{String}, numbers::Vector{Int}, coordline::Int
+    if all(!isnothing, counts) && all(c -> c > 0, counts)
+        numbers = Int[c for c in counts]                # VASP4: no symbols line
+        labels = String["X$i" for i = 1:length(numbers)]
+        coordline = 7
+    else
+        labels = String.(toks6)                         # VASP5: symbols then counts
+        cnt = map(t -> tryparse(Int, t), split(strip(lines[7])))
+        all(!isnothing, cnt) && all(c -> c > 0, cnt) ||
+            throw(ArgumentError("bad atom counts on POSCAR line 7: $(lines[7])"))
+        numbers = Int[c for c in cnt]
+        coordline = 8
+    end
+    length(labels) == length(numbers) ||
+        throw(ArgumentError("POSCAR: $(length(labels)) species symbols vs $(length(numbers)) counts"))
+
+    mode = lowercase(strip(lines[coordline]))
+    if startswith(mode, "s")                            # optional Selective dynamics line
+        coordline += 1
+        coordline <= length(lines) ||
+            throw(ArgumentError("POSCAR ends after 'Selective dynamics' (no coordinate-mode line)"))
+        mode = lowercase(strip(lines[coordline]))
+    end
+    cartesian = startswith(mode, "c") || startswith(mode, "k")
+    startswith(mode, "d") || cartesian ||
+        throw(ArgumentError("invalid POSCAR coordinate mode: $(lines[coordline])"))
+
+    nat = sum(numbers)
+    pos = Matrix{Float64}(undef, 3, nat)
+    first = coordline + 1
+    for a = 1:nat
+        li = first + a - 1
+        li <= length(lines) || throw(ArgumentError("POSCAR ends before all $nat positions"))
+        toks = split(strip(lines[li]))
+        length(toks) >= 3 || throw(ArgumentError("bad position on POSCAR line $li"))
+        for j = 1:3
+            pos[j, a] = parse(Float64, toks[j])
+        end
+    end
+    # Cartesian coords carry the same scaling; converting to fractional cancels it.
+    frac = cartesian ? (A \ (s .* pos)) : pos
+
+    species = Vector{Int}(undef, nat)
+    a = 0
+    for (si, c) in enumerate(numbers), _ = 1:c
+        species[a += 1] = si
+    end
+    return Crystal(Lattice(A), frac, species, labels)
+end
+
+"""
+    SCETools.VASP.write_poscar(path, crystal; comment = "…", cartesian = false)
+
+Write `crystal` to a VASP POSCAR file (scaling factor `1.0`, atoms grouped by species in
+`species_labels` order, `Direct` coordinates unless `cartesian = true`). Species with no atoms
+are omitted from the symbol/count lines. Note: atoms are **reordered** into species groups, so
+any external per-atom array (forces, charges, …) indexed by the original atom order must be
+permuted to match (e.g. [`write_inputs`](@ref) does this for MAGMOM).
+"""
+function write_poscar(path::AbstractString, crystal::Crystal;
+                      comment::AbstractString = "generated by SCETools",
+                      cartesian::Bool = false)
+    A = crystal.lattice.vectors
+    nsp = length(crystal.species_labels)
+    groups = [findall(==(s), crystal.species) for s = 1:nsp]
+    present = [s for s = 1:nsp if !isempty(groups[s])]
+    row(v) = join((string(v[k]) for k = 1:3), "  ")
+    open(path, "w") do io
+        println(io, comment)
+        println(io, "1.0")
+        for i = 1:3
+            println(io, "  ", row(@view A[:, i]))       # line i = i-th lattice vector
+        end
+        println(io, join((crystal.species_labels[s] for s in present), " "))
+        println(io, join((length(groups[s]) for s in present), " "))
+        println(io, cartesian ? "Cartesian" : "Direct")
+        for s in present, a in groups[s]
+            f = SVector{3,Float64}(crystal.frac_positions[1, a], crystal.frac_positions[2, a],
+                                   crystal.frac_positions[3, a])
+            println(io, "  ", row(cartesian ? A * f : f))
+        end
+    end
+    return path
+end
+
+# ── OSZICAR (constrained-noncollinear training data) ──────────────────────────────────
+
+"""
+    SCETools.VASP.Oszicar(paths; saxis = [0, 0, 1], energy_kind = :free, mint = false)
+
+An `AbstractDFTSource` over one or more VASP OSZICAR files — each contributes one `SpinDatum`
+(in the given order, through `MagestyRebuild.read_configs`). `paths` may be a single path or a
+vector.
+
+# Keyword arguments
+- `saxis`: the `SAXIS` quantization axis; moments and fields are rotated from this frame into
+  Cartesian coordinates by `Rz(α)·Ry(β)` (default `[0,0,1]` = identity).
+- `energy_kind`: `:free` (the `F=` free energy) or `:sigma0` (`E0`, energy σ→0).
+- `mint`: read the moment from the `M_int` columns instead of `MW_int`. The constraining field
+  `lambda*MW_perp` is referenced to the `MW_int` moment, so the default `mint = false` keeps the
+  moment and field (hence the torque) mutually consistent.
+"""
+struct Oszicar <: AbstractDFTSource
+    paths::Vector{String}
+    saxis::SVector{3,Float64}
+    energy_kind::Symbol
+    mint::Bool
+end
+
+function Oszicar(paths::AbstractVector{<:AbstractString};
+                saxis = SVector{3,Float64}(0, 0, 1),
+                energy_kind::Symbol = :free, mint::Bool = false)
+    energy_kind in (:free, :sigma0) ||
+        throw(ArgumentError("energy_kind must be :free or :sigma0; got $(repr(energy_kind))"))
+    return Oszicar(collect(String, paths), SVector{3,Float64}(saxis), energy_kind, mint)
+end
+Oszicar(path::AbstractString; kwargs...) = Oszicar([path]; kwargs...)
+
+# Final-step energy and per-atom moment vectors (3 × n_atoms) from one OSZICAR. The moment block
+# is the `ion … MW_int … M_int` table (7 columns: idx + MW_int xyz + M_int xyz); it ends at a `:`
+# line or any non-7-column line (e.g. the `… F= … E0= …` summary). The last committed block /
+# last `F=` line (final ionic step) wins.
+function _oszicar_energy_moments(path::AbstractString, energy_kind::Symbol, mint::Bool)
+    energy = 0.0
+    found_e = false
+    moments = SVector{3,Float64}[]
+    tmp = SVector{3,Float64}[]
+    collecting = false
+    cols = mint ? (5, 6, 7) : (2, 3, 4)
+    for line in eachline(path)
+        if occursin("M_int", line)
+            collecting = true
+            empty!(tmp)
+            continue
+        end
+        if collecting && (occursin(":", line) || length(split(line)) != 7)
+            collecting = false
+            moments = copy(tmp)
+        end
+        if collecting
+            p = split(line)
+            push!(tmp, SVector{3,Float64}(parse(Float64, p[cols[1]]),
+                                          parse(Float64, p[cols[2]]),
+                                          parse(Float64, p[cols[3]])))
+        end
+        if occursin("F=", line)
+            # take the token right after the keyword (robust to other fields shifting),
+            # rather than a fixed column index.
+            p = split(line)
+            key = energy_kind === :free ? "F=" : "E0="
+            k = findfirst(==(key), p)
+            if k !== nothing && k < length(p)
+                v = tryparse(Float64, p[k + 1])
+                v === nothing || (energy = v; found_e = true)
+            end
+        end
+    end
+    collecting && (moments = copy(tmp))                 # block running at EOF
+    found_e || throw(ArgumentError("no energy (F= line) found in $path"))
+    isempty(moments) &&
+        throw(ArgumentError("no magnetic-moment (M_int) block found in $path"))
+    return energy, reduce(hcat, moments)                # 3 × n_atoms
+end
+
+# Per-atom constraining field (3 × n_atoms) from the `lambda*MW_perp` block; rows are
+# `idx Bx By Bz`, only for constrained atoms (others stay zero). The last block wins; a missing
+# block (unconstrained run) yields a zero field.
+function _oszicar_field(path::AbstractString, nat::Int)::Matrix{Float64}
+    field = zeros(3, nat)
+    tmp = zeros(3, nat)
+    in_block = false
+    got = false
+    for line in eachline(path)
+        if occursin("lambda*MW_perp", line)
+            in_block = true
+            fill!(tmp, 0.0)
+            got = false
+            continue
+        end
+        if in_block
+            p = split(line)
+            idx = length(p) == 4 ? tryparse(Int, p[1]) : nothing
+            if idx !== nothing && 1 <= idx <= nat
+                tmp[1, idx] = parse(Float64, p[2])
+                tmp[2, idx] = parse(Float64, p[3])
+                tmp[3, idx] = parse(Float64, p[4])
+                got = true
+                continue
+            else
+                in_block = false
+                got && (field .= tmp)
+            end
+        end
+    end
+    in_block && got && (field .= tmp)                   # block running at EOF
+    return field
+end
+
+function read_configs(src::Oszicar)::Vector{SpinDatum}
+    R = _saxis_rotation(src.saxis)
+    data = Vector{SpinDatum}(undef, length(src.paths))
+    for (i, path) in enumerate(src.paths)
+        isfile(path) || throw(ArgumentError("OSZICAR not found: $path"))
+        energy, moments = _oszicar_energy_moments(path, src.energy_kind, src.mint)
+        field = _oszicar_field(path, size(moments, 2))
+        data[i] = SpinDatum(energy, R * moments, R * field)   # SAXIS → Cartesian frame
+    end
+    return data
+end
+
+# ── INCAR writing (sampled directions → constrained-noncollinear inputs) ───────────────
 
 # The 3 × n moment matrix: column a = magmoms[a] · (unit direction a), in the SAXIS frame.
 function _moment_matrix(directions::AbstractMatrix{<:Real}, magmoms::AbstractVector{<:Real}, saxis)
@@ -57,15 +314,9 @@ function _moment_matrix(directions::AbstractMatrix{<:Real}, magmoms::AbstractVec
     return M
 end
 
-# Do two SAXIS vectors point the same way (the magnitude is irrelevant — only the axis matters)?
-_saxis_approx(a, b) = isapprox(collect(float.(a)) ./ norm(float.(collect(a))),
-                              collect(float.(b)) ./ norm(float.(collect(b))); atol = 1e-8)
-
 # "x y z  x y z  …" with `%.9f`, double space between atoms (matches the VASP/Magesty layout).
 _format_moments(M::AbstractMatrix{<:Real}) =
     join((@sprintf("%.9f %.9f %.9f", M[1, a], M[2, a], M[3, a]) for a = 1:size(M, 2)), "  ")
-
-# --- INCAR template parsing (line-based passthrough) -------------------------------------
 
 # Expand a VASP numeric value list, honouring the `n*v` repeat syntax, to a flat vector.
 function _parse_floats(s::AbstractString)::Vector{Float64}
@@ -119,10 +370,10 @@ function _incar_text(base)::String
     throw(ArgumentError("`base` looks like a file path but does not exist: $(base)"))
 end
 
-# Read a template INCAR (path or raw text). Returns `(kept_lines, magmom, has_icm, saxis)`:
-# every line except the MAGMOM / M_CONSTR assignments (preserved verbatim, comments and all),
-# the parsed MAGMOM vector (or `nothing`) used as the moment-magnitude source, whether the
-# template constrains (`I_CONSTRAINED_M`), and the template's SAXIS (or `nothing`).
+# Read a template INCAR (path or raw text). Returns `(kept_lines, magmom, has_icm, saxis)`: every
+# line except the MAGMOM / M_CONSTR assignments (preserved verbatim, comments and all), the
+# parsed MAGMOM vector (or `nothing`) used as the moment-magnitude source, whether the template
+# constrains (`I_CONSTRAINED_M`), and the template's SAXIS (or `nothing`).
 function _process_template(base)
     kept = String[]
     magmom = nothing
@@ -144,8 +395,6 @@ function _process_template(base)
     return kept, magmom, has_icm, saxis
 end
 
-# --- magnitude resolution ----------------------------------------------------------------
-
 # Per-atom magnitudes from a template's MAGMOM: a `3n` noncollinear vector → per-atom norms; an
 # `n` collinear vector → used directly.
 function _magmoms_from_template(magmom::Vector{Float64}, n::Int)::Vector{Float64}
@@ -159,8 +408,8 @@ function _magmoms_from_template(magmom::Vector{Float64}, n::Int)::Vector{Float64
 end
 
 # Resolve the `magmoms` argument to a per-atom vector (in the crystal's atom order). Accepts a
-# scalar (uniform), a per-atom vector, a per-species `label => magnitude` map, or `nothing`
-# (take the magnitudes from `template_magmom`).
+# scalar (uniform), a per-atom vector, a per-species `label => magnitude` map, or `nothing` (take
+# the magnitudes from `template_magmom`).
 function _resolve_magmoms(magmoms, n::Int, species, labels,
                           template_magmom::Union{Nothing,Vector{Float64}})::Vector{Float64}
     if magmoms === nothing
@@ -184,8 +433,6 @@ function _resolve_magmoms(magmoms, n::Int, species, labels,
     end
     throw(ArgumentError("magmoms must be a scalar, a per-atom vector, or a per-species map"))
 end
-
-# --- INCAR writing -----------------------------------------------------------------------
 
 _fmt_value(v::Bool) = v ? ".TRUE." : ".FALSE."
 _fmt_value(v) = string(v)
@@ -280,10 +527,8 @@ function write_incar(path::AbstractString, directions::AbstractMatrix{<:Real};
     return path
 end
 
-# --- full input sets (POSCAR + INCAR) ----------------------------------------------------
-
-# The atom order `MagestyRebuild.VASP.write_poscar` uses: atoms grouped by species in
-# `species_labels` order, original order within a species.
+# The atom order `write_poscar` uses: atoms grouped by species in `species_labels` order,
+# original order within a species.
 function _poscar_order(crystal::Crystal)::Vector{Int}
     perm = Int[]
     for s = 1:length(crystal.species_labels)
@@ -300,10 +545,10 @@ end
                                comment = "generated by SCETools", kwargs...)
     SCETools.VASP.write_inputs(rootdir, crystal, configs; prefix = "config", kwargs...)
 
-Write a complete VASP input set — a `POSCAR` (via `MagestyRebuild.VASP.write_poscar`) and a
-matching `INCAR` — for a spin configuration `config` (`3 × n_atoms` unit columns) on `crystal`.
-The INCAR's MAGMOM / M_CONSTR are ordered to match the POSCAR (atoms grouped by species), so the
-two files are always consistent.
+Write a complete VASP input set — a `POSCAR` (via [`write_poscar`](@ref)) and a matching
+`INCAR` — for a spin configuration `config` (`3 × n_atoms` unit columns) on `crystal`. The
+INCAR's MAGMOM / M_CONSTR are ordered to match the POSCAR (atoms grouped by species), so the two
+files are always consistent.
 
 `magmoms` may additionally be a per-species `label => magnitude` map here (resolved through the
 crystal); everything else is forwarded to [`write_incar`](@ref). The second form writes a sweep:
@@ -316,7 +561,7 @@ function write_inputs(dir::AbstractString, crystal::Crystal, config::AbstractMat
     num_atoms(crystal) == size(config, 2) || throw(ArgumentError(
         "config has $(size(config, 2)) atoms but the crystal has $(num_atoms(crystal))"))
     mkpath(dir)
-    MagestyRebuild.VASP.write_poscar(joinpath(dir, "POSCAR"), crystal; comment = comment)
+    write_poscar(joinpath(dir, "POSCAR"), crystal; comment = comment)
 
     n = num_atoms(crystal)
     tmpl_mag = base === nothing ? nothing : _process_template(base)[2]

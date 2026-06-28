@@ -124,7 +124,7 @@ _unit(v) = v / norm(v)
 
         # POSCAR is regrouped by species label order (A = species 1? no: labels ["A","B"],
         # species [2,1,2] ⇒ B (species-index 1) is atom 2; A (species-index 2) is atoms 1,3).
-        reloaded = MagestyRebuild.VASP.read_poscar(joinpath(dir, "POSCAR"))
+        reloaded = V.read_poscar(joinpath(dir, "POSCAR"))
         perm = V._poscar_order(cr)                            # POSCAR atom k ← model atom perm[k]
         permmag = [Dict("A" => 3.0, "B" => 1.0)[cr.species_labels[cr.species[a]]] for a in perm]
         M = reshape(incar_floats(joinpath(dir, "INCAR"), "MAGMOM"), 3, num_atoms(cr))

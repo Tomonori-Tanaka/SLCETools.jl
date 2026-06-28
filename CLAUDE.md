@@ -57,15 +57,18 @@ Inherited from the core (`MagestyRebuild`'s `CLAUDE.md`); the ones this package 
   *forward* of the core's `_l1_pair_matrix` / `_l2_onsite_matrix` (tesseral → `3×3`). The
   bilinear extraction uses the core's (inverse) matrices via `bilinear_terms`; do not
   duplicate that delicate conversion here.
-- **`io/vasp.jl` (write) ↔ `MagestyRebuild.VASP` / `dftsource.jl` (read)**: the INCAR writer
-  must stay inverse-consistent with the reader. (1) **Atom order** — `_poscar_order` must
-  reproduce `write_poscar`'s species grouping exactly, or moments are silently misassigned to
-  atoms. (2) **SAXIS frame** — the writer rotates Cartesian → SAXIS by `Rᵀ`, the inverse of the
-  reader's `Rz(α)Ry(β)` (`_saxis_rotation` must match the reader's α/β); the *declared* SAXIS
-  line and the frame the moments are written in must always agree (template SAXIS is honoured /
-  overridden together). (3) **MAGMOM = magnitude · direction**, M_CONSTR == MAGMOM under
-  `constrain`. The gate is `test/unit/test_vasp_incar.jl` (round-trip, order, formatting). The
-  sampler gives only directions + an order parameter `m_a ∈ [0,1]`, **not** μ_B magnitudes — the
+- **`io/vasp.jl` — read ↔ write inverse-consistency** (`SCETools.VASP`, one module holds both):
+  (1) **SAXIS frame** — one `_saxis_rotation` (`R = Rz(α)Ry(β)`) serves both; the reader rotates
+  SAXIS → Cartesian by `R`, the writer Cartesian → SAXIS by `Rᵀ`, so a write → read round-trip is
+  the identity. The INCAR's *declared* SAXIS line and the frame the moments are written in must
+  always agree (template SAXIS honoured / overridden together). (2) **Atom order** —
+  `_poscar_order` must reproduce `write_poscar`'s species grouping exactly, or `write_inputs`
+  silently misassigns moments to atoms. (3) **MAGMOM = magnitude · direction**, M_CONSTR ==
+  MAGMOM under `constrain`. (4) The **torque sign / SpinDatum layout** is owned upstream by
+  `MagestyRebuild`'s `dftsource.jl` (`τ_a = m_a × B_a`); the OSZICAR reader must keep producing
+  that. Gates: `test/unit/test_vaspio.jl` (read), `test/unit/test_vasp_incar.jl` (write,
+  round-trip / order / formatting), `test/oracle/` (parsers vs Magesty bit-for-bit). The sampler
+  gives only directions + an order parameter `m_a ∈ [0,1]`, **not** μ_B magnitudes — the write
   magnitudes are an external input.
 
 ## Tests

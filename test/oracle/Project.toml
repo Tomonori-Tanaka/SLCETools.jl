@@ -1,0 +1,11 @@
+[deps]
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+Magesty = "329bda51-4b33-4ad1-95c9-f0535f133d43"
+MagestyRebuild = "854eb3e0-bd75-4c3b-927c-573f5c6d8b1d"
+SCETools = "77bd043c-7a11-43a2-98fa-bb6bc0462af0"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[sources]
+Magesty = {path = "../../../Magesty.jl"}
+MagestyRebuild = {path = "../../../Magesty_rebuild.jl"}
+SCETools = {path = "../.."}

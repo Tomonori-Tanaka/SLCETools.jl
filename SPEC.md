@@ -28,9 +28,14 @@ src/sampling/
   mfa_sampler.jl             # P1–P4: MFASampler / MFASample, the `sample` verb, dispatch
   sce_bridge.jl              # ExchangeModel / MultipoleField / MFASampler from a fitted SCEModel
 src/io/
-  vasp.jl                    # module SCETools.VASP: write_incar / write_inputs (constrained NCL)
+  vasp.jl                    # module SCETools.VASP: the VASP adapter — read (read_poscar /
+                             #   Oszicar) + write (write_poscar / write_incar / write_inputs)
 src/active_learning/         # planned (see below); empty until implemented
 ```
+
+`test/oracle/` is a separate environment (pinned Magesty.jl) that cross-checks the VASP
+POSCAR / OSZICAR parsers bit-for-bit against Magesty; run with
+`julia --project=test/oracle test/oracle/runtests.jl`.
 
 ## Public API (sampling)
 
@@ -43,14 +48,19 @@ Construction fidelity ladder: `MFASampler(reference)` (single global isotropic) 
 `MFASampler(ExchangeModel(...); reference)` (multi-sublattice isotropic / tensorial) →
 `MFASampler(model::SCEModel; reference)` (full multipole, all clusters and `l`).
 
-## Public API (VASP input writing — `SCETools.VASP`)
+## Public API (VASP I/O — `SCETools.VASP`)
 
-`write_incar(path, directions; magmoms, base, constrain, saxis, …)` and
-`write_inputs(dir | rootdir, crystal, config | configs; …)` turn sampled spin directions into
-constrained-noncollinear VASP inputs (INCAR, or a POSCAR + INCAR input set / sweep). The writer
-is inverse-consistent with the reader-side `MagestyRebuild.VASP` (POSCAR atom order, SAXIS
-frame, MAGMOM / M_CONSTR layout). Moment magnitudes come from a per-atom vector, a scalar, a
-per-species map, or a template INCAR's MAGMOM.
+The concrete VASP adapter the fitting core leaves out (the core owns only the abstract DFT-data
+seam). Both directions, with one shared frame / format convention so a write → read round-trip
+is the identity:
+
+- **read** — `read_poscar(path) -> Crystal`; `Oszicar(paths; saxis, energy_kind, mint)` (an
+  `AbstractDFTSource`, consumed by `MagestyRebuild.read_configs` / `SCEDataset`). Produces
+  training data.
+- **write** — `write_poscar(path, crystal; …)`; `write_incar(path, directions; magmoms, base,
+  constrain, saxis, …)`; `write_inputs(dir | rootdir, crystal, config | configs; …)` (a POSCAR +
+  INCAR input set / sweep, atom order matched). Moment magnitudes come from a per-atom vector, a
+  scalar, a per-species map, or a template INCAR's MAGMOM.
 
 See `docs/specs/mfa-sampling.md` for the design (decisions D1–D5, phases P0–P4) and the
 physical conventions (`τ = T/T_MF`, `T_MF = ρ/3`, mean-field decoupling, vMF / Bingham).

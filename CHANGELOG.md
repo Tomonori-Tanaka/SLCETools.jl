@@ -6,11 +6,21 @@ release, so everything lives under *Unreleased*.
 
 ## [Unreleased]
 
+### Changed — VASP **reader** moved in from MagestyRebuild (all VASP I/O now here)
+
+The concrete VASP reader (`read_poscar`, `write_poscar`, `Oszicar` → `SpinDatum` via the
+`MagestyRebuild.read_configs` seam) moved out of the fitting core into `SCETools.VASP`, joining
+the writer so all VASP I/O lives in one place. The fitting core now keeps only the abstract
+DFT-data seam (`AbstractDFTSource` / `SpinDatum` / `SCEDataset`). Reading VASP training data is
+now `using SCETools; SCETools.VASP.read_poscar` / `Oszicar`. The unit tests
+(`test/unit/test_vaspio.jl`), the `examples/vasp_dft_source.jl` end-to-end example, and the
+VASP-vs-Magesty oracle cross-check (`test/oracle/`) came with it. Adds the `StaticArrays`
+dependency usage in the VASP module (already a dependency).
+
 ### Added — VASP input writing (`SCETools.VASP`)
 
 Turn sampled spin configurations into constrained-noncollinear VASP inputs (the
-active-learning "label" step). Namespaced as `SCETools.VASP`, mirroring the reader-side
-`MagestyRebuild.VASP`.
+active-learning "label" step). Part of the `SCETools.VASP` adapter (alongside the reader above).
 
 - **`write_incar(path, directions; magmoms, base, constrain, saxis, …)`** — write one INCAR.
   The MAGMOM (and, under `constrain`, M_CONSTR) is `magnitude · direction` per atom, `%.9f`.

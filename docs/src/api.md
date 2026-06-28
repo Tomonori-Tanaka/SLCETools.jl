@@ -28,9 +28,12 @@ The [`ExchangeModel`](@ref) / [`MultipoleField`](@ref) carriers are documented u
 ([`thermal_averaged_m`](@ref), [`tau_from_magnetization`](@ref), [`mfa_sublattice_m`](@ref),
 [`mfa_temperature_scale`](@ref)) under [Sampling](guide/sampling.md).
 
-## VASP input writing
+## VASP I/O
 
-The namespaced `SCETools.VASP` submodule
-([`write_inputs`](@ref SCETools.VASP.write_inputs),
-[`write_incar`](@ref SCETools.VASP.write_incar)) writes constrained-noncollinear VASP inputs
-from sampled configurations; see [VASP inputs](guide/dft_inputs.md).
+The namespaced `SCETools.VASP` submodule is the concrete VASP adapter: it **reads** DFT
+training data ([`read_poscar`](@ref SCETools.VASP.read_poscar),
+[`Oszicar`](@ref SCETools.VASP.Oszicar)) and **writes** constrained-noncollinear inputs from
+sampled configurations ([`write_inputs`](@ref SCETools.VASP.write_inputs),
+[`write_incar`](@ref SCETools.VASP.write_incar),
+[`write_poscar`](@ref SCETools.VASP.write_poscar)). See [VASP I/O](guide/vasp.md); the
+docstrings are shown there.

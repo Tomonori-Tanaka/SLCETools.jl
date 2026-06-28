@@ -23,7 +23,7 @@ makedocs(;
         "Guide" => [
             "guide/sampling.md",
             "guide/exchange_models.md",
-            "guide/dft_inputs.md",
+            "guide/vasp.md",
         ],
         "Theory" => [
             "theory/mfa.md",
