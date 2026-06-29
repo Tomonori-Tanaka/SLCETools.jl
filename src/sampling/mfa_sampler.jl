@@ -139,30 +139,47 @@ at the reduced temperature `τ` (or magnetization `m`), via [`sample`](@ref).
   with DMI / anisotropic exchange or single-ion anisotropy it is the general Metropolis
   draw on the Bingham single-site potential (P3). See `sampling/exchange.jl`.
 
-`exch` is the backing `ExchangeModel` (`nothing` for the single global sampler); `Abar` is
-the normalized molecular-field matrix `Ā` (spectral radius 1), `rho` its Perron eigenvalue,
-and `Tmf = ρ/3` the linearized mean-field `T_MF`.
+The backing `source` is the coupling model the sampler draws from: `nothing` for the single
+global sampler, an [`ExchangeModel`](@ref) for the bilinear/single-ion path (P2/P3), or a
+[`MultipoleModel`](@ref) for the full-multipole path (P4); the sampler is parametric on its
+type so dispatch is type-stable. `Abar` is the normalized molecular-field matrix `Ā` (spectral
+radius 1), `rho` its Perron eigenvalue, and `Tmf = ρ/3` the linearized mean-field `T_MF`.
 """
-struct MFASampler <: AbstractSampler
+struct MFASampler{S} <: AbstractSampler
     reference::Matrix{Float64}                 # 3 × n_atoms, unit columns
-    exch::Union{Nothing,ExchangeModel}         # bilinear+single-ion backing (P2/P3); else nothing
-    multipole::Union{Nothing,MultipoleField}   # full-multipole backing (P4); else nothing
+    source::S                                  # Nothing | ExchangeModel | MultipoleModel
     Abar::Matrix{Float64}                      # normalized Ā (ρ=1); 0×0 for the global sampler
     rho::Float64                               # Perron eigenvalue (1.0 for global)
     Tmf::Float64                               # linearized T_MF = ρ/3 (model units); 1.0 if global
+
+    # Inner constructor: enforce the source ↔ coupling-matrix invariant (a global sampler
+    # carries no Ā / ρ; a model-backed one carries an n×n Ā and ρ > 0).
+    function MFASampler(reference::Matrix{Float64}, source::S, Abar::Matrix{Float64},
+                        rho::Float64, Tmf::Float64) where {S}
+        n = size(reference, 2)
+        if source === nothing
+            size(Abar) == (0, 0) ||
+                throw(ArgumentError("the global sampler carries no molecular-field matrix"))
+        else
+            size(Abar) == (n, n) || throw(DimensionMismatch(
+                "Ā is $(size(Abar)) but the reference has $n atoms"))
+            rho > 0 || throw(ArgumentError("the Perron eigenvalue ρ must be positive; got $rho"))
+        end
+        return new{S}(reference, source, Abar, rho, Tmf)
+    end
 end
 
 # P1: single global, no couplings. Normalizes and validates the reference.
 function MFASampler(reference::AbstractMatrix{<:Real})
-    return MFASampler(_normalize_reference(reference), nothing, nothing, zeros(0, 0), 1.0, 1.0)
+    return MFASampler(_normalize_reference(reference), nothing, zeros(0, 0), 1.0, 1.0)
 end
 
-# P4: the full-multipole sampler, backed by a `MultipoleField` (all SCE clusters / l). The
+# P4: the full-multipole sampler, backed by a `MultipoleModel` (all SCE clusters / l). The
 # l=1 temperature scale ρ comes from the bilinear part; the draw is always Metropolis.
-function MFASampler(mf::MultipoleField; reference::AbstractMatrix{<:Real})
+function MFASampler(mf::MultipoleModel; reference::AbstractMatrix{<:Real})
     ref = _normalize_reference(reference)
     size(ref, 2) == mf.natoms || throw(DimensionMismatch(
-        "reference has $(size(ref, 2)) atoms but the MultipoleField has $(mf.natoms)"))
+        "reference has $(size(ref, 2)) atoms but the MultipoleModel has $(mf.natoms)"))
     A = _mfa_matrix(mf.bilinear, ref)
     ρ, signdef = _perron(A)
     # lmax ≥ 1 is guaranteed here: ρ > 0 requires an l=1 bilinear channel (and every term
@@ -176,7 +193,7 @@ function MFASampler(mf::MultipoleField; reference::AbstractMatrix{<:Real})
     signdef || @warn "the leading molecular-field eigenvector is not sign-definite; the " *
         "reference may be frustrated or not the model's ordered ground state."
     _check_reference_stationary(mf.bilinear, ref)
-    return MFASampler(ref, nothing, mf, A ./ ρ, ρ, ρ / 3)
+    return MFASampler(ref, mf, A ./ ρ, ρ, ρ / 3)
 end
 
 # P2/P3: backed by an ExchangeModel. Builds the longitudinal molecular-field matrix about
@@ -195,7 +212,7 @@ function MFASampler(exch::ExchangeModel; reference::AbstractMatrix{<:Real})
         "reference may be frustrated or not the model's ordered ground state — the " *
         "self-consistency still runs but T_MF/m_a(τ) may not reflect the intended order."
     _check_reference_stationary(exch, ref)
-    return MFASampler(ref, exch, nothing, A ./ ρ, ρ, ρ / 3)
+    return MFASampler(ref, exch, A ./ ρ, ρ, ρ / 3)
 end
 
 # Normalize a 3 × n_atoms reference matrix to unit columns, validating shape and norms.
@@ -219,26 +236,23 @@ _natoms(s::MFASampler)::Int = size(s.reference, 2)
 
 # Does the sampler need the general Metropolis draw (a Bingham / higher-multipole single-site
 # potential), or does the closed-form vMF suffice (single global, or isotropic exchange)?
-_needs_metropolis(s::MFASampler)::Bool =
-    s.multipole !== nothing || (s.exch !== nothing && !s.exch.isotropic)
+_needs_metropolis(::MFASampler{Nothing})::Bool = false
+_needs_metropolis(s::MFASampler{ExchangeModel})::Bool = !s.source.isotropic
+_needs_metropolis(::MFASampler{MultipoleModel})::Bool = true
 
-function _kind(s::MFASampler)::String
-    s.multipole !== nothing && return "multipole"
-    s.exch === nothing && return "global"
-    return s.exch.isotropic ? "isotropic" : "tensorial"
-end
+_kind(::MFASampler{Nothing})::String = "global"
+_kind(s::MFASampler{ExchangeModel})::String = s.source.isotropic ? "isotropic" : "tensorial"
+_kind(::MFASampler{MultipoleModel})::String = "multipole"
 
 Base.show(io::IO, s::MFASampler) =
     print(io, "MFASampler(", _natoms(s), " atoms, ", _kind(s), ")")
 
 # The per-atom single-site coefficient vectors (for the Metropolis draw) and magnetizations
 # m_a at reduced temperature τ, for a sampler that needs the Metropolis path.
-function _coeffs_and_m(s::MFASampler, τ::Float64)
-    if s.multipole !== nothing
-        return _multipole_state(s.multipole::MultipoleField, _ehat(s), s.rho, τ)
-    end
-    return _tensor_state(s.exch::ExchangeModel, _ehat(s), s.rho, τ)
-end
+_coeffs_and_m(s::MFASampler{MultipoleModel}, τ::Float64) =
+    _multipole_state(s.source, _ehat(s), s.rho, τ)
+_coeffs_and_m(s::MFASampler{ExchangeModel}, τ::Float64) =
+    _tensor_state(s.source, _ehat(s), s.rho, τ)
 
 """
     mfa_temperature_scale(sampler) -> Float64
@@ -284,6 +298,13 @@ struct MFASample
     configs::Vector{Matrix{Float64}}
     tau::Vector{Float64}
     m::Vector{Vector{Float64}}
+
+    function MFASample(configs::Vector{Matrix{Float64}}, tau::Vector{Float64},
+                       m::Vector{Vector{Float64}})
+        (length(configs) == length(tau) == length(m)) || throw(DimensionMismatch(
+            "configs/tau/m must be parallel; got $(length(configs)) / $(length(tau)) / $(length(m))"))
+        return new(configs, tau, m)
+    end
 end
 
 Base.length(s::MFASample) = length(s.configs)
@@ -306,19 +327,20 @@ end
 # The per-atom vMF draw state at reduced temperature τ: (ordered, κ::Vector, m::Vector).
 # Single global ⇒ one κ broadcast to all atoms; isotropic exchange ⇒ the solved per-atom
 # fields. (The tensorial path uses `_tensor_state` and the Metropolis draw instead.)
-function _mfa_state(s::MFASampler, τ::Float64)
+function _mfa_state(s::MFASampler{Nothing}, τ::Float64)
     n = _natoms(s)
-    if s.exch === nothing
-        if τ < _MFA_MIN_TAU
-            return (true, fill(Inf, n), ones(n))
-        elseif τ > _MFA_MAX_TAU
-            return (false, fill(_MFA_KAPPA_UNIFORM, n), zeros(n))
-        end
-        m = thermal_averaged_m(τ)
-        return (false, fill(3m / τ, n), fill(m, n))
+    if τ < _MFA_MIN_TAU
+        return (true, fill(Inf, n), ones(n))
+    elseif τ > _MFA_MAX_TAU
+        return (false, fill(_MFA_KAPPA_UNIFORM, n), zeros(n))
     end
-    return _coupled_state(s.Abar, τ, n)
+    m = thermal_averaged_m(τ)
+    return (false, fill(3m / τ, n), fill(m, n))
 end
+
+# Isotropic ExchangeModel (the only model-backed sampler that reaches the closed-form vMF
+# path; the tensorial / multipole sources go through _coeffs_and_m + Metropolis instead).
+_mfa_state(s::MFASampler{ExchangeModel}, τ::Float64) = _coupled_state(s.Abar, τ, _natoms(s))
 
 # Draw one configuration with per-atom concentration `κ` (ordered ⇒ copy the reference).
 # `uniform` columns are redrawn isotropically (overriding the vMF draw); a global rotation

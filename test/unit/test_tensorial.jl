@@ -60,7 +60,7 @@ _mean_Z(l, m, configs, a) = mean(_Z(l, m, c[:, a]) for c in configs)
                        reference = Float64[0 0; 0 0; 1 1])
         τ = 1.1
         # quadrature reference: the converged single-site coefficients and their ⟨Z_lm⟩
-        cs, mq = MR._tensor_state(s.exch, MR._ehat(s), s.rho, τ)
+        cs, mq = MR._tensor_state(s.source, MR._ehat(s), s.rho, τ)
         avg = MR.multipole_average(cs[1], 2)
         samp = sample(s, 6000; tau = τ, rng = MersenneTwister(7))
         @test _mean_Z(2, 0, samp.configs, 1) ≈ avg[MR.Harmonics.lm_index(2, 0)] atol = 3e-2

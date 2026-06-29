@@ -61,44 +61,47 @@ struct ExchangeModel
     bilinear::Matrix{SMatrix{3,3,Float64,9}}           # S_ab: field g_a = Σ_b S_ab ⟨e_b⟩
     onsite::Vector{SMatrix{3,3,Float64,9}}             # single-ion A_a (zero ⇒ none)
     isotropic::Bool                                    # all S_ab ∝ I and onsite all zero
+
+    # Inner constructor (the only way to build an ExchangeModel): validate shapes and the
+    # energy symmetry S_ba = S_ab', symmetrize exactly, and classify isotropic vs tensorial.
+    # The convenience outer constructors (Jiso / bilinear keyword forms, and from a fitted
+    # model) all route through here, so the invariants cannot be bypassed.
+    function ExchangeModel(bilinear::Matrix{SMatrix{3,3,Float64,9}},
+                           onsite::Vector{SMatrix{3,3,Float64,9}})
+        n = size(bilinear, 1)
+        size(bilinear, 2) == n ||
+            throw(ArgumentError("bilinear must be square; got $(size(bilinear))"))
+        length(onsite) == n ||
+            throw(ArgumentError("onsite must have one matrix per atom ($n); got $(length(onsite))"))
+        bil = Matrix{SMatrix{3,3,Float64,9}}(undef, n, n)
+        scale = 0.0
+        @inbounds for a = 1:n, b = 1:n
+            scale = max(scale, maximum(abs.(bilinear[a, b])))
+        end
+        @inbounds for a = 1:n, b = 1:n
+            maximum(abs.(bilinear[b, a] - bilinear[a, b]')) <= 1.0e-9 * (1 + scale) ||
+                throw(ArgumentError("bilinear must satisfy bilinear[b,a] = bilinear[a,b]' " *
+                                    "(a real bilinear energy); violated at ($a,$b)"))
+            bil[a, b] = 0.5 * (bilinear[a, b] + bilinear[b, a]')   # symmetrize the energy exactly
+        end
+        Jiso = Matrix{Float64}(undef, n, n)
+        iso = true
+        @inbounds for a = 1:n, b = 1:n
+            j = (bil[a, b][1, 1] + bil[a, b][2, 2] + bil[a, b][3, 3]) / 3
+            Jiso[a, b] = j
+            maximum(abs.(bil[a, b] - j * _I3)) <= 1.0e-9 * (1 + scale) || (iso = false)
+        end
+        osc = 0.0
+        @inbounds for a = 1:n
+            osc = max(osc, maximum(abs.(onsite[a])))
+        end
+        osc > 1.0e-12 * (1 + scale) && (iso = false)
+        return new(n, Jiso, bil, onsite, iso)
+    end
 end
 
 Base.show(io::IO, m::ExchangeModel) =
     print(io, "ExchangeModel(", m.natoms, " atoms", m.isotropic ? ", isotropic" : ", tensorial", ")")
-
-# Canonical builder: validate shapes and the energy symmetry S_ba = S_ab', then classify.
-function _build_exchange(bilinear::Matrix{SMatrix{3,3,Float64,9}},
-                         onsite::Vector{SMatrix{3,3,Float64,9}})::ExchangeModel
-    n = size(bilinear, 1)
-    size(bilinear, 2) == n ||
-        throw(ArgumentError("bilinear must be square; got $(size(bilinear))"))
-    length(onsite) == n ||
-        throw(ArgumentError("onsite must have one matrix per atom ($n); got $(length(onsite))"))
-    bil = Matrix{SMatrix{3,3,Float64,9}}(undef, n, n)
-    scale = 0.0
-    @inbounds for a = 1:n, b = 1:n
-        scale = max(scale, maximum(abs.(bilinear[a, b])))
-    end
-    @inbounds for a = 1:n, b = 1:n
-        maximum(abs.(bilinear[b, a] - bilinear[a, b]')) <= 1.0e-9 * (1 + scale) ||
-            throw(ArgumentError("bilinear must satisfy bilinear[b,a] = bilinear[a,b]' " *
-                                "(a real bilinear energy); violated at ($a,$b)"))
-        bil[a, b] = 0.5 * (bilinear[a, b] + bilinear[b, a]')   # symmetrize the energy exactly
-    end
-    Jiso = Matrix{Float64}(undef, n, n)
-    iso = true
-    @inbounds for a = 1:n, b = 1:n
-        j = (bil[a, b][1, 1] + bil[a, b][2, 2] + bil[a, b][3, 3]) / 3
-        Jiso[a, b] = j
-        maximum(abs.(bil[a, b] - j * _I3)) <= 1.0e-9 * (1 + scale) || (iso = false)
-    end
-    osc = 0.0
-    @inbounds for a = 1:n
-        osc = max(osc, maximum(abs.(onsite[a])))
-    end
-    osc > 1.0e-12 * (1 + scale) && (iso = false)
-    return ExchangeModel(n, Jiso, bil, onsite, iso)
-end
 
 # Normalize an `onsite` keyword (nothing ⇒ zeros) to a length-n vector of SMatrices.
 function _onsite_vec(onsite, n::Int)::Vector{SMatrix{3,3,Float64,9}}
@@ -114,13 +117,13 @@ function ExchangeModel(Jiso::AbstractMatrix{<:Real}; onsite = nothing)
     J = Matrix{Float64}(Jiso)
     maximum(abs.(J - J'); init = 0.0) <= 1.0e-10 * (1 + maximum(abs.(J); init = 0.0)) ||
         throw(ArgumentError("Jiso must be symmetric (Jiso[a,b] = Jiso[b,a])"))
-    bil = [J[a, b] * _I3 for a = 1:n, b = 1:n]
-    return _build_exchange(bil, _onsite_vec(onsite, n))
+    bil = Matrix{SMatrix{3,3,Float64,9}}([J[a, b] * _I3 for a = 1:n, b = 1:n])
+    return ExchangeModel(bil, _onsite_vec(onsite, n))
 end
 
 function ExchangeModel(bilinear::AbstractMatrix{<:SMatrix{3,3}}; onsite = nothing)
     bil = Matrix{SMatrix{3,3,Float64,9}}(bilinear)
-    return _build_exchange(bil, _onsite_vec(onsite, size(bil, 1)))
+    return ExchangeModel(bil, _onsite_vec(onsite, size(bil, 1)))
 end
 
 # --- the longitudinal molecular-field matrix and its Perron analysis ---------------
@@ -368,22 +371,40 @@ struct _MFATerm
 end
 
 """
-    MultipoleField
+    MultipoleModel
 
 The digested full-multipole mean field of a fitted SCE (P4): every cluster term
 (`_MFATerm`), the `lmax`, and the bilinear [`ExchangeModel`](@ref) (used only for the
-`l=1` temperature scale `ρ`). Built by `MultipoleField(model::SCEPredictor)`; consumed by the
+`l=1` temperature scale `ρ`). Built by `MultipoleModel(model::SCEPredictor)`; consumed by the
 [`MFASampler`](@ref) tensorial/Metropolis path.
+
+Renamed from `MultipoleField` in v0.2 (it is a coupling *model*, the full-fidelity sibling
+of [`ExchangeModel`](@ref), not a field); the old name remains as a deprecated binding.
 """
-struct MultipoleField
+struct MultipoleModel
     natoms::Int
     lmax::Int
     terms::Vector{_MFATerm}
     bilinear::ExchangeModel
+
+    # Inner constructor: enforce the structural invariants the mean-field solver relies on.
+    function MultipoleModel(natoms::Int, lmax::Int, terms::Vector{_MFATerm},
+                            bilinear::ExchangeModel)
+        isempty(terms) && throw(ArgumentError("MultipoleModel needs at least one term"))
+        bilinear.natoms == natoms || throw(DimensionMismatch(
+            "bilinear ExchangeModel has $(bilinear.natoms) atoms but the model has $natoms"))
+        maxl = maximum(maximum(t.ls) for t in terms)
+        lmax >= maxl || throw(ArgumentError("lmax=$lmax does not cover the terms' max l=$maxl"))
+        @inbounds for t in terms, a in t.atoms
+            1 <= a <= natoms ||
+                throw(ArgumentError("term atom index $a outside 1:$natoms"))
+        end
+        return new(natoms, lmax, terms, bilinear)
+    end
 end
 
-Base.show(io::IO, mf::MultipoleField) =
-    print(io, "MultipoleField(", mf.natoms, " atoms, lmax=", mf.lmax, ", ",
+Base.show(io::IO, mf::MultipoleModel) =
+    print(io, "MultipoleModel(", mf.natoms, " atoms, lmax=", mf.lmax, ", ",
           length(mf.terms), " terms)")
 
 # Reference multipoles ⟨Z_lm⟩ = Z_lm(ê_a) (the fully ordered state), per atom, length
@@ -441,7 +462,7 @@ end
 # multipole averages ⟨Z_lm⟩_a (β = 3/(ρτ), ρ the l=1 bilinear Perron) to self-consistency,
 # then return (cs, m): the single-site coefficient vectors for the Metropolis draw and the
 # magnetizations m_a = ⟨e·ê_a⟩. τ floored at _MFA_MIN_TAU so β stays finite.
-function _multipole_state(mf::MultipoleField, ehat::Vector{SVector{3,Float64}}, ρ::Float64,
+function _multipole_state(mf::MultipoleModel, ehat::Vector{SVector{3,Float64}}, ρ::Float64,
                           τ::Float64)
     n = mf.natoms
     lmax = mf.lmax

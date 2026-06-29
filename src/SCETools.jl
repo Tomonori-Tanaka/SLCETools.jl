@@ -38,7 +38,7 @@ using SCEFitting: SCEPredictor, n_atoms, multipole_terms, MultipoleTerm, bilinea
 include("sampling/site_engine.jl")
 include("sampling/exchange.jl")
 include("sampling/mfa_sampler.jl")
-# Extract an ExchangeModel / MultipoleField from a fitted SCE via the core's public
+# Extract an ExchangeModel / MultipoleModel from a fitted SCE via the core's public
 # `multipole_terms` / `bilinear_terms` introspection.
 include("sampling/sce_bridge.jl")
 
@@ -51,8 +51,12 @@ include("io/vasp.jl")
 include("viz/distributions.jl")
 
 # Mean-field spin-configuration sampling (docs/specs/mfa-sampling.md).
-export AbstractSampler, MFASampler, MFASample, ExchangeModel, MultipoleField, sample,
+export AbstractSampler, MFASampler, MFASample, ExchangeModel, MultipoleModel, sample,
     mfa_temperature_scale, mfa_sublattice_m, thermal_averaged_m, tau_from_magnetization
+
+# Deprecated alias: `MultipoleModel` was named `MultipoleField` before v0.2 (it is a coupling
+# model, the full-fidelity sibling of `ExchangeModel`, not a field). Kept one minor version.
+Base.@deprecate_binding MultipoleField MultipoleModel
 
 # Per-atom MFA probability distribution export (viz/distributions.jl).
 export SiteDistributionField, SphereGrid, fibonacci_sphere, mfa_site_coefficients,

@@ -1,5 +1,5 @@
 # P4 of the mean-field sampler (docs/specs/mfa-sampling.md): the full multipole MFA over all
-# SCE clusters and l (`MultipoleField` / `MFASampler(model::SCEPredictor)`). Validates that the
+# SCE clusters and l (`MultipoleModel` / `MFASampler(model::SCEPredictor)`). Validates that the
 # many-body factorization `h_a^{lm} = Σ_φ jφ folded ∏_{b≠a} ⟨Z_b⟩` is built correctly — by
 # the exact reduction to the single-global Langevin curve for a pure-bilinear model, by
 # scale invariance, and (the headline higher-order check) by matching the single-site
@@ -33,14 +33,29 @@ function _dimer_model()
 end
 
 @testset "full multipole sampler (P4)" begin
-    @testset "MultipoleField construction" begin
-        mf1 = MultipoleField(_dimer_model())
+    @testset "MultipoleModel construction" begin
+        mf1 = MultipoleModel(_dimer_model())
         @test mf1.natoms == 4
         @test mf1.lmax == 1
         @test length(mf1.terms) == 2                   # both directed members of the 1–2 bond
-        mf2 = MultipoleField(_biquadratic_model(0))
+        mf2 = MultipoleModel(_biquadratic_model(0))
         @test mf2.lmax == 2                             # the [2,2] biquadratic channel
         @test length(mf2.terms) > length(mf1.terms)
+        # the deprecated MultipoleField binding still resolves to MultipoleModel
+        @test SCETools.MultipoleField === MultipoleModel
+    end
+
+    @testset "MultipoleModel inner constructor enforces invariants" begin
+        mf = MultipoleModel(_dimer_model())
+        t = mf.terms[1]
+        # lmax must cover the terms' max l
+        @test_throws ArgumentError MultipoleModel(mf.natoms, 0, mf.terms, mf.bilinear)
+        # bilinear atom count must match
+        bad = ExchangeModel(zeros(mf.natoms + 1, mf.natoms + 1))
+        @test_throws DimensionMismatch MultipoleModel(mf.natoms, mf.lmax, mf.terms, bad)
+        # no terms
+        @test_throws ArgumentError MultipoleModel(mf.natoms, mf.lmax, SCETools._MFATerm[],
+                                                  mf.bilinear)
     end
 
     @testset "pure-bilinear model reduces to the single-global Langevin curve" begin
@@ -73,7 +88,7 @@ end
         # ⟨∏ Z⟩ → ∏⟨Z⟩. Check the e-dependence against a direct Monte-Carlo conditional mean
         # energy of the biquadratic model — an independent test of `_site_coeffs_all!`.
         model = _biquadratic_model(0)
-        mf = MultipoleField(model)
+        mf = MultipoleModel(model)
         ref = Float64[0 0; 0 0; 1 1]
         ehat = [SVector{3,Float64}(ref[:, a]) for a = 1:2]
         ρ, _ = MR._perron(MR._mfa_matrix(mf.bilinear, ref))
@@ -96,7 +111,7 @@ end
 
     @testset "Metropolis draw reproduces the full multipole self-consistency" begin
         model = _biquadratic_model(0)
-        mf = MultipoleField(model)
+        mf = MultipoleModel(model)
         ref = Float64[0 0; 0 0; 1 1]
         ehat = [SVector{3,Float64}(ref[:, a]) for a = 1:2]
         ρ, _ = MR._perron(MR._mfa_matrix(mf.bilinear, ref))

@@ -136,5 +136,7 @@ _zref(n) = repeat(Float64[0, 0, 1], 1, n)
         @test sw.m[1] !== sw.m[2]
         sw.m[1][1] = -99.0
         @test sw.m[2][1] != -99.0
+        # the inner constructor rejects non-parallel configs/tau/m
+        @test_throws DimensionMismatch SCETools.MFASample([zeros(3, 1)], [0.5, 0.6], [[1.0]])
     end
 end

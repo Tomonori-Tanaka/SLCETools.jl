@@ -1,4 +1,4 @@
-# Mean-field sampler — extracting an `ExchangeModel` / `MultipoleField` from a fitted SCE
+# Mean-field sampler — extracting an `ExchangeModel` / `MultipoleModel` from a fitted SCE
 # (see `docs/specs/mfa-sampling.md`). Reads the fitted Hamiltonian only through the core's
 # public introspection surface (`SCEFitting.bilinear_terms` / `multipole_terms`), never
 # the SALC-basis internals — so the basis representation can evolve independently.
@@ -37,7 +37,7 @@ single-ion anisotropy (`ls=[2]`) of a fitted `SCEPredictor` into an [`ExchangeMo
 via the core's public `bilinear_terms` extraction. The bond matrices are placed
 directionally (`bilinear[a,b] = S_ab`, the reverse member transposed), so the molecular
 field is `g_a = Σ_b S_ab ⟨e_b⟩`. Only the higher-order / higher-`l` SALCs (3-body and up)
-are dropped — captured instead by the full [`MultipoleField`](@ref) path — and reported via
+are dropped — captured instead by the full [`MultipoleModel`](@ref) path — and reported via
 `@warn`.
 """
 function ExchangeModel(model::SCEPredictor)
@@ -52,7 +52,7 @@ function ExchangeModel(model::SCEPredictor)
 end
 
 """
-    MultipoleField(model::SCEPredictor) -> MultipoleField
+    MultipoleModel(model::SCEPredictor) -> MultipoleModel
 
 Digest a fitted `SCEPredictor` into the full-multipole mean field (P4): one mean-field term per
 cluster member / `l`-ordering (carrying `jϕ·(4π)^(N/2)`, the member atoms, the per-site
@@ -62,7 +62,7 @@ the core's public `multipole_terms` view, so it keeps **all** channels — bilin
 single-ion, and higher-order / many-body — and the mean field iterates the full multipole
 averages `⟨Z_lm⟩`.
 """
-function MultipoleField(model::SCEPredictor)
+function MultipoleModel(model::SCEPredictor)
     n = n_atoms(model)
     terms = _MFATerm[]
     lmax = 0
@@ -72,25 +72,28 @@ function MultipoleField(model::SCEPredictor)
         # holds, but assert it (a repeated site would need CG recoupling, not a self-⟨Z⟩
         # factor).
         allunique(mt.atoms) || throw(ArgumentError(
-            "MultipoleField: cluster member with a repeated atom $(mt.atoms); the " *
+            "MultipoleModel: cluster member with a repeated atom $(mt.atoms); the " *
             "mean-field factorization assumes distinct sites"))
-        push!(terms, _MFATerm(mt.coef * (4π)^(mt.body / 2), mt.atoms, mt.ls, mt.folded))
+        # Copy the fields out of the core's introspection view: never alias the fitted model's
+        # internal SALC arrays into a long-lived term (value semantics, no upstream mutation).
+        push!(terms, _MFATerm(mt.coef * (4π)^(mt.body / 2), copy(mt.atoms), copy(mt.ls),
+                              copy(mt.folded)))
         lmax = max(lmax, maximum(mt.ls))
     end
     isempty(terms) && throw(ArgumentError(
         "the model has no spin-dependent SALCs with a nonzero coefficient"))
     bilinear, onsite, _, _ = _extract_bilinear_onsite(model)
-    return MultipoleField(n, lmax, terms, ExchangeModel(bilinear; onsite = onsite))
+    return MultipoleModel(n, lmax, terms, ExchangeModel(bilinear; onsite = onsite))
 end
 
 """
     MFASampler(model::SCEPredictor; reference) -> MFASampler
 
-The full-multipole mean-field sampler (P4): build a [`MultipoleField`](@ref) from the fitted
+The full-multipole mean-field sampler (P4): build a [`MultipoleModel`](@ref) from the fitted
 SCE (keeping every channel — bilinear, single-ion, and higher-order / many-body) and sample
 about `reference`. The `l=1` temperature scale `T_MF = ρ/3` comes from the bilinear part;
 the single-site distribution (a Bingham / higher-multipole shape) is drawn with the
 Metropolis engine. See [`MFASampler(::ExchangeModel)`](@ref) for the bilinear-only path.
 """
 MFASampler(model::SCEPredictor; reference::AbstractMatrix{<:Real}) =
-    MFASampler(MultipoleField(model); reference = reference)
+    MFASampler(MultipoleModel(model); reference = reference)
