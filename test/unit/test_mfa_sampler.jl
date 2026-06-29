@@ -125,4 +125,16 @@ _zref(n) = repeat(Float64[0, 0, 1], 1, n)
         b = sample(s, 10; tau = 0.5, rng = MersenneTwister(42))
         @test a.configs == b.configs
     end
+
+    @testset "MFASample: array-like interface and per-config m (no aliasing)" begin
+        s = MFASampler(_zref(4))
+        sw = sample(s; tau = [0.3, 0.6], nsamples = 3, rng = MersenneTwister(11))
+        @test length(sw) == 6
+        @test sw[end] === sw.configs[end]           # lastindex defined ⇒ `end` works
+        @test sw[begin] === sw.configs[1]
+        # each config carries its own m vector: mutating one must not touch a co-τ sibling
+        @test sw.m[1] !== sw.m[2]
+        sw.m[1][1] = -99.0
+        @test sw.m[2][1] != -99.0
+    end
 end

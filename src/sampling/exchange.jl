@@ -321,8 +321,12 @@ function _tensor_state(exch::ExchangeModel, ehat::Vector{SVector{3,Float64}}, ρ
         ones_m = ones(n)
         @inbounds for a = 1:n
             g = _molecular_field(exch, ehat, ones_m, a)
-            coupled = norm(g) > 1.0e-12 || maximum(abs.(exch.onsite[a])) > 1.0e-12
-            m[a] = coupled ? 1.0 : 0.0
+            # The order parameter saturates (m → 1) only with a net l=1 molecular field. An
+            # atom with a purely single-ion (l=2) mean field has an e → −e symmetric Bingham
+            # distribution, so ⟨e·ê_a⟩ → 0 — continuous with the τ just above the floor (where
+            # m = (4π/3) _l1_field(⟨Z⟩)·ê_a → 0), not 1. The sharply-peaked cs (built from the
+            # ordered means) still gives the correct symmetric draw.
+            m[a] = norm(g) > 1.0e-12 ? 1.0 : 0.0
             cs[a] = _site_coeffs(g, exch.onsite[a], β)
         end
         return cs, m
@@ -382,9 +386,6 @@ Base.show(io::IO, mf::MultipoleField) =
     print(io, "MultipoleField(", mf.natoms, " atoms, lmax=", mf.lmax, ", ",
           length(mf.terms), " terms)")
 
-# Does atom a appear in any term (i.e. feel a mean field)?
-_atom_in_terms(mf::MultipoleField, a::Int)::Bool = any(t -> a in t.atoms, mf.terms)
-
 # Reference multipoles ⟨Z_lm⟩ = Z_lm(ê_a) (the fully ordered state), per atom, length
 # (lmax+1)² and ordered by `Harmonics.lm_index`.
 function _ref_multipoles(ehat::Vector{SVector{3,Float64}}, lmax::Int)::Vector{Vector{Float64}}
@@ -441,9 +442,16 @@ function _multipole_state(mf::MultipoleField, ehat::Vector{SVector{3,Float64}}, 
     Zref = _ref_multipoles(ehat, lmax)
     cs = [zeros(Float64, nlm) for _ = 1:n]
     if τ < _MFA_MIN_TAU
-        # Fully ordered limit: ⟨Z⟩ = Z(ê_a); each atom appearing in a term saturates (m=1).
+        # Fully ordered limit: ⟨Z⟩ = Z(ê_a). An atom saturates (m → 1) only with a net l=1
+        # molecular field; one whose mean field is purely even-l (e.g. single-ion only) has an
+        # e → −e symmetric distribution, so ⟨e·ê_a⟩ → 0 — continuous with the τ just above the
+        # floor. Gate on the l=1 part of the single-site potential (β-independent ratio).
         _site_coeffs_all!(cs, mf.terms, Zref, β, n)
-        m = [_atom_in_terms(mf, a) ? 1.0 : 0.0 for a = 1:n]
+        m = Vector{Float64}(undef, n)
+        @inbounds for a = 1:n
+            g = _l1_field(cs[a])
+            m[a] = norm(g) > 1.0e-12 * (1 + norm(cs[a])) ? 1.0 : 0.0
+        end
         return cs, m
     end
     Zavg = [copy(Zref[a]) for a = 1:n]

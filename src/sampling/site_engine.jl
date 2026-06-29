@@ -97,6 +97,10 @@ azimuth in the tangent plane. For `κ → 0` the draw is isotropic.
 """
 function sample_vmf(rng::AbstractRNG, μ::SVector{3,Float64}, κ::Real)::SVector{3,Float64}
     κ < 1.0e-10 && return _random_unit(rng)
+    # Fully ordered limit (κ = Inf, the τ < _MFA_MIN_TAU path): the draw is exactly μ. Take it
+    # directly — the inverse-CDF below would give w = 1 + log(u)/Inf = NaN when u happens to be
+    # exactly 0.0.
+    isfinite(κ) || return μ
     u = rand(rng)
     w = 1.0 + log(u + (1.0 - u) * exp(-2κ)) / κ
     w = clamp(w, -1.0, 1.0)

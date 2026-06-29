@@ -18,7 +18,7 @@ See `docs/specs/mfa-sampling.md` for the sampler design.
 """
 module SCETools
 
-using LinearAlgebra: norm, det, I, eigen, Symmetric, Diagonal, dot, cross, mul!
+using LinearAlgebra: norm, I, eigen, Symmetric, dot, cross, mul!
 using StaticArrays
 using Statistics: mean
 using Random: AbstractRNG, default_rng

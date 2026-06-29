@@ -144,4 +144,13 @@ end
         @test maximum(abs(V[i] - MV._site_potential(field.coeffs[1], grid.dirs[i]))
                       for i = 1:200) < 1e-13
     end
+
+    @testset "_emit_json escapes control characters (RFC 8259)" begin
+        buf = IOBuffer()
+        MV._emit_json(buf, "a\"b\\c\nd\te")
+        @test String(take!(buf)) == "\"a\\\"b\\\\c\\nd\\te\""
+        buf = IOBuffer()
+        MV._emit_json(buf, "x\x01y")                  # a bare control char → 
+        @test String(take!(buf)) == "\"x\\u0001y\""
+    end
 end

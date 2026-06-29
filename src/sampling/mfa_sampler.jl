@@ -288,6 +288,8 @@ end
 
 Base.length(s::MFASample) = length(s.configs)
 Base.getindex(s::MFASample, i) = s.configs[i]
+Base.firstindex(s::MFASample) = 1
+Base.lastindex(s::MFASample) = length(s.configs)
 Base.eltype(::Type{MFASample}) = Matrix{Float64}
 Base.iterate(s::MFASample, st::Int = 1) =
     st > length(s.configs) ? nothing : (s.configs[st], st + 1)
@@ -430,7 +432,7 @@ function _sample_sweep(sampler::MFASampler, taus::Vector{Float64}, per::Integer,
             k += 1
             configs[k] = _draw_config(rng, ref, ordered, κ, randomize, fixed, uniform)
             tau_lab[k] = τ
-            m_lab[k] = mval
+            m_lab[k] = copy(mval)   # one m vector per config (no aliasing across co-τ draws)
         end
     end
     return MFASample(configs, tau_lab, m_lab)
@@ -480,7 +482,7 @@ function _sweep_metropolis(sampler::MFASampler, taus::Vector{Float64}, per::Inte
             k += 1
             configs[k] = out
             tau_lab[k] = τ
-            m_lab[k] = mval
+            m_lab[k] = copy(mval)   # one m vector per config (no aliasing across co-τ draws)
         end
     end
     return MFASample(configs, tau_lab, m_lab)

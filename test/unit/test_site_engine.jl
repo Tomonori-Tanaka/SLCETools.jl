@@ -99,6 +99,17 @@ end
         @test abs(z10_mc) < 2e-2
     end
 
+    @testset "vMF: the fully ordered limit (κ = Inf) returns μ without NaN" begin
+        μ = SVector{3,Float64}(0, 0, 1)
+        # κ = Inf is the τ < _MFA_MIN_TAU saturated path; the draw must be exactly μ for any
+        # rng state, including the rng-returns-0.0 corner that would make the inverse CDF NaN.
+        for seed = 1:50
+            v = MR.sample_vmf(MersenneTwister(seed), μ, Inf)
+            @test v === μ
+            @test all(isfinite, v)
+        end
+    end
+
     @testset "draws are reproducible under a fixed seed" begin
         c, _ = _l1_field_along_z(2.0, 1)
         a = MR.sample_site_metropolis(MersenneTwister(99), c, 50; nburn = 50)

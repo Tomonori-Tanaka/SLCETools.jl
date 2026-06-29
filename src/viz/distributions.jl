@@ -230,8 +230,21 @@ function _emit_json(io::IO, x)
     if x isa AbstractString
         print(io, '"')
         for ch in x
-            ch == '"' ? print(io, "\\\"") :
-            ch == '\\' ? print(io, "\\\\") : print(io, ch)
+            if ch == '"'
+                print(io, "\\\"")
+            elseif ch == '\\'
+                print(io, "\\\\")
+            elseif ch == '\n'
+                print(io, "\\n")
+            elseif ch == '\r'
+                print(io, "\\r")
+            elseif ch == '\t'
+                print(io, "\\t")
+            elseif ch < '\x20'                       # RFC 8259: escape all control chars
+                print(io, "\\u", lpad(string(UInt16(ch); base = 16), 4, '0'))
+            else
+                print(io, ch)
+            end
         end
         print(io, '"')
     elseif x isa Bool

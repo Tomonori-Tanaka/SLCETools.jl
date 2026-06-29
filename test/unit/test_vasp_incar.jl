@@ -116,6 +116,20 @@ _unit(v) = v / norm(v)
         @test count(l -> occursin("SAXIS", l), collect(eachline(p))) == 1   # not duplicated
     end
 
+    @testset "SAXIS kwarg overrides a disagreeing template SAXIS (with a warning)" begin
+        base = "SAXIS = 1.0 0.0 1.0\nMAGMOM = 0 0 2  0 0 2  0 0 2\nI_CONSTRAINED_M = 1\n"
+        p = tempname()
+        @test_logs (:warn,) match_mode = :any V.write_incar(p, cfg; base = base,
+                                                            constrain = false, saxis = (0, 0, 1))
+        # the declared SAXIS must be the kwarg's (default frame ⇒ no SAXIS line), and the moments
+        # are written in that same frame — exactly one consistent frame in the file.
+        @test count(l -> occursin("SAXIS", l), collect(eachline(p))) == 0
+        Mframe = reshape(incar_floats(p, "MAGMOM"), 3, 3)
+        for a = 1:3
+            @test Mframe[:, a] ≈ 2.0 .* cfg[:, a] atol = 1e-9   # default frame: no rotation
+        end
+    end
+
     @testset "write_inputs: POSCAR + INCAR consistent, atom order grouped by species" begin
         dir = mktempdir()
         V.write_inputs(dir, cr, cfg; magmoms = Dict("A" => 3.0, "B" => 1.0), constrain = true)
@@ -141,6 +155,22 @@ _unit(v) = v / norm(v)
         V.write_inputs(d2, cr, cfg; magmoms = Dict("A" => 3.0, "B" => 1.0), constrain = false)  # per-species
         @test incar_floats(joinpath(d1, "INCAR"), "MAGMOM") ≈
               incar_floats(joinpath(d2, "INCAR"), "MAGMOM")
+    end
+
+    @testset "write_inputs: per-species map and a SAXIS frame compose (order then rotate)" begin
+        d = mktempdir()
+        saxis = (1.0, 0.0, 1.0)
+        V.write_inputs(d, cr, cfg; magmoms = Dict("A" => 3.0, "B" => 1.0),
+                       constrain = false, saxis = saxis)
+        p = joinpath(d, "INCAR")
+        Mframe = reshape(incar_floats(p, "MAGMOM"), 3, 3)
+        R = V._saxis_rotation(saxis)                 # reader: SAXIS frame → Cartesian
+        perm = V._poscar_order(cr)                    # INCAR rows are in POSCAR (species-grouped) order
+        mag = Dict("A" => 3.0, "B" => 1.0)
+        for (col, a) in enumerate(perm)
+            want = mag[cr.species_labels[cr.species[a]]] .* cfg[:, a]
+            @test (R * Mframe[:, col]) ≈ want atol = 1e-9   # magnitude resolved, then frame-rotated
+        end
     end
 
     @testset "sweep: one subdirectory per configuration" begin

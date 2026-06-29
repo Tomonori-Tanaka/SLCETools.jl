@@ -108,4 +108,17 @@ _mean_Z(l, m, configs, a) = mean(_Z(l, m, c[:, a]) for c in configs)
         b = sample(s, 20; tau = 0.6, rng = MersenneTwister(3))
         @test a.configs == b.configs
     end
+
+    @testset "ordered limit: a single-ion-only atom has m → 0, not 1" begin
+        # Atoms 1,2 carry the exchange ordering channel; atom 3 has no bilinear coupling, only
+        # an easy-axis single-ion term. At τ → 0 its distribution is an e → −e symmetric
+        # double-well along ±ê, so ⟨e·ê_3⟩ → 0 (no net l=1 field) — m must NOT saturate to 1.
+        A = SMatrix{3,3,Float64}(1, 0, 0, 0, 1, 0, 0, 0, -2)        # easy-axis along z
+        Jiso = [0.0 -1.0 0.0; -1.0 0.0 0.0; 0.0 0.0 0.0]
+        s = MFASampler(ExchangeModel(Jiso; onsite = [zero(A), zero(A), A]);
+                       reference = Float64[0 0 0; 0 0 0; 1 1 1])
+        m = mfa_sublattice_m(s, 1e-8)
+        @test m[1] ≈ 1.0 && m[2] ≈ 1.0                              # exchange-ordered
+        @test m[3] == 0.0                                           # single-ion only ⇒ no net m
+    end
 end
