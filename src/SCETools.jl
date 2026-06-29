@@ -32,23 +32,31 @@ using SCEFitting: SCEPredictor, n_atoms, multipole_terms, MultipoleTerm, bilinea
     Crystal
 
 # --- mean-field spin-configuration sampling (docs/specs/mfa-sampling.md) ---
-# P0: the single-site engine (potential, vMF / Metropolis draws, sphere quadrature).
-# P2/P3: the ExchangeModel carrier + coupled self-consistency (before MFASampler, which
-# references the ExchangeModel type). P1/P2/P3: the `MFASampler` + the `sample` verb.
-include("sampling/site_engine.jl")
-include("sampling/exchange.jl")
-include("sampling/mfa_sampler.jl")
-# Extract an ExchangeModel / MultipoleModel from a fitted SCE via the core's public
-# `multipole_terms` / `bilinear_terms` introspection.
-include("sampling/sce_bridge.jl")
+# P0: the single-site engine submodule (potential, vMF / Metropolis draws, sphere quadrature),
+# pure on-sphere math; the parent re-binds the names the rest of the package uses.
+include("mfa/engine.jl")
+using .MeanFieldEngine: _random_unit, _field_lmax, _site_potential, _l1_field, sample_vmf,
+    sample_vmf_field, sample_site_metropolis, SphereQuadrature, sphere_quadrature,
+    _field_scale, multipole_average
+# types (carriers + sampler) → ExchangeModel construction → the τ self-consistency solvers →
+# the MFASampler constructors + the `sample` verb → extraction from a fitted SCE.
+include("mfa/types.jl")
+include("mfa/exchange.jl")
+include("mfa/selfconsistency.jl")
+include("mfa/sampler.jl")
+include("mfa/bridge.jl")
 
 # VASP input writing: sampled spin configurations → constrained-noncollinear INCAR / input
 # sets. Namespaced as `SCETools.VASP` (mirrors the reader-side `SCEFitting.VASP`), so it
 # does not grow the top-level export list.
 include("io/vasp.jl")
 
-# Per-atom MFA probability distributions → coefficient export for the Python sphere viewer.
+# Per-atom MFA probability distributions → coefficient export for the Python sphere viewer:
+# the shared render grid + basis matrix (grid), the per-atom coefficients (distributions), and
+# the self-describing JSON document (serialize).
+include("viz/grid.jl")
 include("viz/distributions.jl")
+include("viz/serialize.jl")
 
 # Mean-field spin-configuration sampling (docs/specs/mfa-sampling.md).
 export AbstractSampler, MFASampler, MFASample, ExchangeModel, MultipoleModel, sample,

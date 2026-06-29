@@ -1,108 +1,11 @@
-# Mean-field sampler — P1/P2 (see `docs/specs/mfa-sampling.md`).
+# Mean-field sampler — the `MFASampler` constructors and the `sample` verb (see
+# `docs/specs/mfa-sampling.md`). The sampler types live in `types.jl`; the self-consistency
+# solvers in `selfconsistency.jl`; the single-site draws in the `MeanFieldEngine` submodule.
 #
-# Builds on the P0 single-site engine: each spin `a` is drawn from a von Mises–Fisher
-# distribution `vMF(ê_a, κ_a)` about its reference direction, with a per-atom
-# concentration set by the mean-field self-consistency in the reduced temperature
-# `τ = T/T_MF`.
-#
-#   P1 — single global magnetization (no model): every atom shares one
-#        `κ = 3m/τ` from the scalar self-consistency `m = L(3m/τ)`. Magesty-equivalent.
-#   P2 — multi-sublattice isotropic exchange (from an `ExchangeModel`): the coupled
-#        per-atom self-consistency `m_a = L(3(Ā m)_a/τ)` with the normalized molecular-
-#        field matrix `Ā` (spectral radius 1), `κ_a = 3(Ā m)_a/τ`.
-#
-# `AbstractSampler` is the dispatch seam the later model-backed samplers (tensorial /
-# higher-order MFA, P3+) slot into; `sample` is the one verb. The P2 coupling extraction
-# and the `ExchangeModel` carrier live in `sampling/exchange.jl`.
-
-"""
-    AbstractSampler
-
-Dispatch seam for spin-configuration samplers. [`MFASampler`](@ref) (mean-field) is the
-first; future Metropolis-MC / spin-spiral samplers can slot in behind the `sample` verb.
-"""
-abstract type AbstractSampler end
-
-# Numerical guards on the reduced temperature τ = T/T_MF, mirroring the reference
-# sampler so the ordered / near-uniform boundaries reproduce it exactly.
-const _MFA_MIN_TAU = 1.0e-5        # below this: fully ordered, return the reference
-const _MFA_MAX_TAU = 0.99999       # above this: use a vanishing concentration
-const _MFA_KAPPA_UNIFORM = 1.0e-6  # the near-uniform-limit concentration
-# Bracket for the self-consistent magnetization root m ∈ (0, 1). A distinct physical
-# quantity from the temperature guards above, so it carries its own name. The upper end
-# sits at 1⁻ʳ so the near-saturated root for τ just above _MFA_MIN_TAU stays bracketed.
-const _MFA_M_MIN = 1.0e-5
-const _MFA_M_MAX = 1.0 - 1.0e-9
-
-# The Langevin function L(κ) = coth κ − 1/κ = ⟨cosθ⟩ for a vMF field of concentration κ.
-# `coth κ − 1/κ` cancels catastrophically as κ → 0, so a Maclaurin series is used there
-# (the cone half-width regime near T_MF, where the coupled solve spends its iterations).
-function _langevin(κ::Real)::Float64
-    κf = Float64(κ)
-    a = abs(κf)
-    if a < 0.1
-        return κf * (1 / 3 - κf^2 / 45 + 2 * κf^4 / 945)
-    end
-    return coth(κf) - 1 / κf
-end
-
-# Bisection root of a function that brackets a sign change on [lo, hi]; orientation-
-# agnostic. Used for the monotone mean-field self-consistency (avoids a Roots dependency).
-function _bisect(f, lo::Float64, hi::Float64; tol::Float64 = 1.0e-12, maxit::Int = 200)::Float64
-    a, b = lo, hi
-    fa = f(a)
-    for _ = 1:maxit
-        m = 0.5 * (a + b)
-        fm = f(m)
-        (abs(fm) <= tol || (b - a) <= tol) && return m
-        if (fa < 0) == (fm < 0)
-            a, fa = m, fm
-        else
-            b = m
-        end
-    end
-    return 0.5 * (a + b)
-end
-
-"""
-    thermal_averaged_m(τ) -> Float64
-
-Solve the classical-Heisenberg mean-field self-consistency `m = L(3m/τ)` (equivalently
-`m = coth(3m/τ) − τ/3m`) for the thermally averaged magnetization `m` at reduced
-temperature `τ = T/T_MF`. Returns `1.0` for `τ < $(_MFA_MIN_TAU)` (fully ordered) and
-`0.0` for `τ > $(_MFA_MAX_TAU)` (fully disordered). This is the single-sublattice case of
-the coupled self-consistency [`MFASampler`](@ref) solves for `ExchangeModel` sources.
-"""
-function thermal_averaged_m(τ::Real)::Float64
-    τf = Float64(τ)
-    τf < _MFA_MIN_TAU && return 1.0
-    τf > _MFA_MAX_TAU && return 0.0
-    # f(m) = m − L(3m/τ) is increasing on (0,1): f(m_min) = m(1−1/τ) < 0 (for τ<1) and
-    # f(m_max) = 1⁻ − L(3/τ) > 0 across the whole interior τ range.
-    f(m) = m - _langevin(3m / τf)
-    return _bisect(f, _MFA_M_MIN, _MFA_M_MAX)
-end
-
-"""
-    tau_from_magnetization(m) -> Float64
-
-Invert the mean-field self-consistency: the reduced temperature `τ = T/T_MF` whose
-thermally averaged magnetization is `m`. Returns `1.0` for `m ≤ 0` and `0.0` for
-`m ≥ 1`; magnetizations whose temperature falls outside `[$(_MFA_MIN_TAU),
-$(_MFA_MAX_TAU)]` clamp to the disordered (`1.0`) or ordered (`0.0`) limit.
-"""
-function tau_from_magnetization(m::Real)::Float64
-    mf = Float64(m)
-    mf <= 0.0 && return 1.0
-    mf >= 1.0 && return 0.0
-    g(τ) = mf - _langevin(3mf / τ)               # increasing in τ
-    g_lo = g(_MFA_MIN_TAU)
-    g_hi = g(_MFA_MAX_TAU)
-    if (g_lo < 0) == (g_hi < 0)                   # root outside the bracket: clamp
-        return abs(g_lo) <= abs(g_hi) ? 0.0 : 1.0
-    end
-    return _bisect(g, _MFA_MIN_TAU, _MFA_MAX_TAU)
-end
+# Each spin `a` is drawn from a von Mises–Fisher distribution `vMF(ê_a, κ_a)` about its
+# reference direction (or the general Metropolis draw for a Bingham / higher-multipole
+# single-site potential), with a per-atom concentration set by the mean-field
+# self-consistency in the reduced temperature `τ = T/T_MF`.
 
 # Uniform random rotation in SO(3) via Shoemake's unit-quaternion construction. Used by
 # the optional `randomize` global-frame randomization (a no-op on isotropic statistics,
@@ -120,53 +23,21 @@ function _random_rotation(rng::AbstractRNG)::SMatrix{3,3,Float64}
     ]
 end
 
-"""
-    MFASampler(reference) <: AbstractSampler
-    MFASampler(exch::ExchangeModel; reference)
-
-Mean-field spin-configuration sampler. Every spin is drawn from `vMF(ê_a, κ_a)` about its
-reference direction; the per-atom concentration is set by the mean-field self-consistency
-at the reduced temperature `τ` (or magnetization `m`), via [`sample`](@ref).
-
-- `MFASampler(reference)` — the single global, isotropic sampler (P1): `reference` is a
-  `3 × n_atoms` matrix of seed directions (columns normalized on construction), and all
-  atoms share one concentration `κ = 3m/τ`, `m = L(3m/τ)`. No couplings; works in reduced
-  units (`mfa_temperature_scale` returns `1.0`).
-- `MFASampler(exch; reference)` — the [`ExchangeModel`](@ref)-backed sampler (P2/P3): the
-  per-atom magnetizations `m_a(τ)` are solved from the coupled mean-field self-consistency
-  about the given `reference` state, so distinct sublattices disorder at distinct rates
-  (a single `T_MF`). For purely isotropic exchange the draw is the closed-form vMF (P2);
-  with DMI / anisotropic exchange or single-ion anisotropy it is the general Metropolis
-  draw on the Bingham single-site potential (P3). See `sampling/exchange.jl`.
-
-The backing `source` is the coupling model the sampler draws from: `nothing` for the single
-global sampler, an [`ExchangeModel`](@ref) for the bilinear/single-ion path (P2/P3), or a
-[`MultipoleModel`](@ref) for the full-multipole path (P4); the sampler is parametric on its
-type so dispatch is type-stable. `Abar` is the normalized molecular-field matrix `Ā` (spectral
-radius 1), `rho` its Perron eigenvalue, and `Tmf = ρ/3` the linearized mean-field `T_MF`.
-"""
-struct MFASampler{S} <: AbstractSampler
-    reference::Matrix{Float64}                 # 3 × n_atoms, unit columns
-    source::S                                  # Nothing | ExchangeModel | MultipoleModel
-    Abar::Matrix{Float64}                      # normalized Ā (ρ=1); 0×0 for the global sampler
-    rho::Float64                               # Perron eigenvalue (1.0 for global)
-    Tmf::Float64                               # linearized T_MF = ρ/3 (model units); 1.0 if global
-
-    # Inner constructor: enforce the source ↔ coupling-matrix invariant (a global sampler
-    # carries no Ā / ρ; a model-backed one carries an n×n Ā and ρ > 0).
-    function MFASampler(reference::Matrix{Float64}, source::S, Abar::Matrix{Float64},
-                        rho::Float64, Tmf::Float64) where {S}
-        n = size(reference, 2)
-        if source === nothing
-            size(Abar) == (0, 0) ||
-                throw(ArgumentError("the global sampler carries no molecular-field matrix"))
-        else
-            size(Abar) == (n, n) || throw(DimensionMismatch(
-                "Ā is $(size(Abar)) but the reference has $n atoms"))
-            rho > 0 || throw(ArgumentError("the Perron eigenvalue ρ must be positive; got $rho"))
-        end
-        return new{S}(reference, source, Abar, rho, Tmf)
+# Normalize a 3 × n_atoms reference matrix to unit columns, validating shape and norms.
+function _normalize_reference(reference::AbstractMatrix{<:Real})::Matrix{Float64}
+    size(reference, 1) == 3 ||
+        throw(ArgumentError("reference must be 3 × n_atoms; got $(size(reference))"))
+    n = size(reference, 2)
+    n >= 1 || throw(ArgumentError("reference must have ≥ 1 atom"))
+    ref = Matrix{Float64}(undef, 3, n)
+    for a = 1:n
+        v = SVector{3,Float64}(reference[1, a], reference[2, a], reference[3, a])
+        nv = norm(v)
+        nv > 1.0e-10 || throw(ArgumentError(
+            "reference column $a has ~zero norm; cannot define a direction"))
+        ref[:, a] = v / nv
     end
+    return ref
 end
 
 # P1: single global, no couplings. Normalizes and validates the reference.
@@ -213,23 +84,6 @@ function MFASampler(exch::ExchangeModel; reference::AbstractMatrix{<:Real})
         "self-consistency still runs but T_MF/m_a(τ) may not reflect the intended order."
     _check_reference_stationary(exch, ref)
     return MFASampler(ref, exch, A ./ ρ, ρ, ρ / 3)
-end
-
-# Normalize a 3 × n_atoms reference matrix to unit columns, validating shape and norms.
-function _normalize_reference(reference::AbstractMatrix{<:Real})::Matrix{Float64}
-    size(reference, 1) == 3 ||
-        throw(ArgumentError("reference must be 3 × n_atoms; got $(size(reference))"))
-    n = size(reference, 2)
-    n >= 1 || throw(ArgumentError("reference must have ≥ 1 atom"))
-    ref = Matrix{Float64}(undef, 3, n)
-    for a = 1:n
-        v = SVector{3,Float64}(reference[1, a], reference[2, a], reference[3, a])
-        nv = norm(v)
-        nv > 1.0e-10 || throw(ArgumentError(
-            "reference column $a has ~zero norm; cannot define a direction"))
-        ref[:, a] = v / nv
-    end
-    return ref
 end
 
 _natoms(s::MFASampler)::Int = size(s.reference, 2)
@@ -285,36 +139,6 @@ end
 _ehat(s::MFASampler)::Vector{SVector{3,Float64}} =
     [SVector{3,Float64}(s.reference[1, a], s.reference[2, a], s.reference[3, a])
      for a = 1:_natoms(s)]
-
-"""
-    MFASample
-
-Labeled result of [`sample`](@ref) (decision D1). `configs` is the bare
-`Vector{Matrix{Float64}}` (each `3 × n_atoms` unit directions); the parallel `tau` and `m`
-hold each config's reduced temperature and per-atom magnetization vector. The object is
-iterable and indexable as its `configs`.
-"""
-struct MFASample
-    configs::Vector{Matrix{Float64}}
-    tau::Vector{Float64}
-    m::Vector{Vector{Float64}}
-
-    function MFASample(configs::Vector{Matrix{Float64}}, tau::Vector{Float64},
-                       m::Vector{Vector{Float64}})
-        (length(configs) == length(tau) == length(m)) || throw(DimensionMismatch(
-            "configs/tau/m must be parallel; got $(length(configs)) / $(length(tau)) / $(length(m))"))
-        return new(configs, tau, m)
-    end
-end
-
-Base.length(s::MFASample) = length(s.configs)
-Base.getindex(s::MFASample, i) = s.configs[i]
-Base.firstindex(s::MFASample) = 1
-Base.lastindex(s::MFASample) = length(s.configs)
-Base.eltype(::Type{MFASample}) = Matrix{Float64}
-Base.iterate(s::MFASample, st::Int = 1) =
-    st > length(s.configs) ? nothing : (s.configs[st], st + 1)
-Base.show(io::IO, s::MFASample) = print(io, "MFASample(", length(s.configs), " configs)")
 
 # Validate 1-based atom indices against the atom count.
 function _check_atom_indices(idx::AbstractVector{<:Integer}, n::Int, name::AbstractString)

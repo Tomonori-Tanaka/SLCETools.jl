@@ -14,6 +14,20 @@
 # Metropolis draw `sample_site_metropolis`; and a deterministic spherical quadrature
 # (`sphere_quadrature` / `multipole_average`) for the multipole averages `⟨Z_lm⟩` the
 # self-consistency (P1+) needs. RNG is always an explicit `AbstractRNG`.
+#
+# Self-contained submodule: pure on-sphere mean-field math with no SCE coupling, depending
+# only on the core's tesseral harmonics. Mirrors `SCEFitting`'s numeric-kernel submodules
+# (`Harmonics`, `AngularMomentum`). The parent re-binds the names it needs with
+# `using .MeanFieldEngine: …`; the primitives are also reachable as `SCETools.MeanFieldEngine.*`.
+module MeanFieldEngine
+
+using StaticArrays: SVector, MVector
+using LinearAlgebra: norm, dot, cross
+using Random: AbstractRNG
+import SCEFitting.Harmonics
+
+export _random_unit, _field_lmax, _site_potential, _l1_field, sample_vmf, sample_vmf_field,
+    sample_site_metropolis, SphereQuadrature, sphere_quadrature, _field_scale, multipole_average
 
 # --- small geometry helpers ------------------------------------------------------
 
@@ -325,3 +339,5 @@ function multipole_average(q::SphereQuadrature, c::AbstractVector{<:Real},
     acc ./= norm_z
     return acc
 end
+
+end # module MeanFieldEngine
