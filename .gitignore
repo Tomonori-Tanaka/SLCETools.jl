@@ -49,6 +49,15 @@ deps/src/
 /scratch/
 /tmp/
 
+# MFA distribution export written by examples/mfa_distributions.jl and the viewer HTML it
+# is rendered into (generated artifacts; the viewer + example are tracked, the data is not).
+/examples/mfa_distributions.json
+/examples/mfa_distributions.html
+
+# ==== Python viewer (viz/) ====
+viz/__pycache__/
+viz/*.pyc
+
 # Note: paper PDFs live under references/papers/ and are ignored there
 # (references/.gitignore). Commit doc figures intentionally; large *generated*
 # figures belong in one of the ignored output directories above.

@@ -28,7 +28,8 @@ using Random: AbstractRNG, default_rng
 # core's tesseral spherical-harmonic kernel, imported so the moved sampler files keep their
 # `Harmonics.Zlm` / `Harmonics.lm_index` calls unchanged.
 import SCEFitting.Harmonics
-using SCEFitting: SCEPredictor, n_atoms, multipole_terms, MultipoleTerm, bilinear_terms
+using SCEFitting: SCEPredictor, n_atoms, multipole_terms, MultipoleTerm, bilinear_terms,
+    Crystal
 
 # --- mean-field spin-configuration sampling (docs/specs/mfa-sampling.md) ---
 # P0: the single-site engine (potential, vMF / Metropolis draws, sphere quadrature).
@@ -46,8 +47,15 @@ include("sampling/sce_bridge.jl")
 # does not grow the top-level export list.
 include("io/vasp.jl")
 
+# Per-atom MFA probability distributions → coefficient export for the Python sphere viewer.
+include("viz/distributions.jl")
+
 # Mean-field spin-configuration sampling (docs/specs/mfa-sampling.md).
 export AbstractSampler, MFASampler, MFASample, ExchangeModel, MultipoleField, sample,
     mfa_temperature_scale, mfa_sublattice_m, thermal_averaged_m, tau_from_magnetization
+
+# Per-atom MFA probability distribution export (viz/distributions.jl).
+export SiteDistributionField, SphereGrid, fibonacci_sphere, mfa_site_coefficients,
+    harmonic_basis, site_probabilities, write_mfa_distributions
 
 end # module SCETools

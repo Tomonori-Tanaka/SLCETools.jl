@@ -24,6 +24,7 @@ makedocs(;
             "guide/sampling.md",
             "guide/exchange_models.md",
             "guide/vasp.md",
+            "guide/distributions.md",
         ],
         "Theory" => [
             "theory/mfa.md",

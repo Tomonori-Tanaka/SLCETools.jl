@@ -28,6 +28,15 @@ The [`ExchangeModel`](@ref) / [`MultipoleField`](@ref) carriers are documented u
 ([`thermal_averaged_m`](@ref), [`tau_from_magnetization`](@ref), [`mfa_sublattice_m`](@ref),
 [`mfa_temperature_scale`](@ref)) under [Sampling](guide/sampling.md).
 
+## Orientation distributions
+
+The per-atom orientation-distribution export (coefficients + a shared harmonic basis, for
+the interactive viewer) is documented under
+[Orientation distributions & visualization](guide/distributions.md):
+[`write_mfa_distributions`](@ref), [`mfa_site_coefficients`](@ref),
+[`SiteDistributionField`](@ref), [`fibonacci_sphere`](@ref), [`SphereGrid`](@ref),
+[`harmonic_basis`](@ref), and [`site_probabilities`](@ref). The docstrings are shown there.
+
 ## VASP I/O
 
 The namespaced `SCETools.VASP` submodule is the concrete VASP adapter: it **reads** DFT

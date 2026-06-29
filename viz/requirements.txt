@@ -1,0 +1,5 @@
+# Python viewer for SCETools.jl MFA orientation distributions (viz/mfa_viewer.py).
+# Standalone — not a dependency of the Julia package.
+numpy>=1.24
+scipy>=1.10
+plotly>=5.18

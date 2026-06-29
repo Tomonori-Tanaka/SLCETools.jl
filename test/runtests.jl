@@ -11,6 +11,7 @@ const TEST_MODE = get(ENV, "TEST_MODE", "default")
         include("unit/test_multipole.jl")
         include("unit/test_vaspio.jl")
         include("unit/test_vasp_incar.jl")
+        include("unit/test_distributions.jl")
     end
     if TEST_MODE in ("default", "all", "aqua")
         include("aqua.jl")
