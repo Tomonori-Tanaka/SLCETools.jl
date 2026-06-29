@@ -389,7 +389,7 @@ Base.show(io::IO, mf::MultipoleField) =
 # Reference multipoles ⟨Z_lm⟩ = Z_lm(ê_a) (the fully ordered state), per atom, length
 # (lmax+1)² and ordered by `Harmonics.lm_index`.
 function _ref_multipoles(ehat::Vector{SVector{3,Float64}}, lmax::Int)::Vector{Vector{Float64}}
-    return [[Harmonics.Zlm(l, m, ehat[a]) for l = 0:lmax for m = -l:l]
+    return [[Harmonics.Zlm_unsafe(l, m, ehat[a]) for l = 0:lmax for m = -l:l]   # ehat is unit
             for a = 1:length(ehat)]
 end
 
@@ -402,29 +402,37 @@ function _site_coeffs_all!(cs::Vector{Vector{Float64}}, terms::Vector{_MFATerm},
     @inbounds for a = 1:n
         fill!(cs[a], 0.0)
     end
-    @inbounds for term in terms
-        atoms = term.atoms
-        ls = term.ls
-        folded = term.folded
-        N = length(atoms)
-        for idx in CartesianIndices(folded)
-            w = term.coef * folded[idx]
-            w == 0.0 && continue
-            for i = 1:N
-                p = 1.0
-                for k = 1:N
-                    k == i && continue
-                    μk = idx[k] - ls[k] - 1
-                    p *= Zavg[atoms[k]][Harmonics.lm_index(ls[k], μk)]
-                end
-                p == 0.0 && continue
-                μi = idx[i] - ls[i] - 1
-                cs[atoms[i]][Harmonics.lm_index(ls[i], μi)] += w * p
-            end
-        end
+    # Dispatch through a rank-specialized barrier: `_MFATerm.folded` is `Array{Float64}` (rank
+    # erased), so `CartesianIndices(folded)` / `idx[k]` would dynamically dispatch on every
+    # access in this hottest many-body loop; the barrier recovers the concrete rank D.
+    for term in terms
+        _accumulate_term!(cs, term.coef, term.atoms, term.ls, term.folded, Zavg)
     end
     @inbounds for a = 1:n
         cs[a] .*= β
+    end
+    return cs
+end
+
+# Accumulate one cluster term's leave-one-out contribution into `cs`, specialized on the
+# concrete tensor rank D = length(atoms) = ndims(folded). Same arithmetic/order as before.
+@inline function _accumulate_term!(cs::Vector{Vector{Float64}}, coef::Float64,
+                                   atoms::Vector{Int}, ls::Vector{Int}, folded::Array{Float64,D},
+                                   Zavg::Vector{Vector{Float64}}) where {D}
+    @inbounds for idx in CartesianIndices(folded)
+        w = coef * folded[idx]
+        w == 0.0 && continue
+        for i = 1:D
+            p = 1.0
+            for k = 1:D
+                k == i && continue
+                μk = idx[k] - ls[k] - 1
+                p *= Zavg[atoms[k]][Harmonics.lm_index(ls[k], μk)]
+            end
+            p == 0.0 && continue
+            μi = idx[i] - ls[i] - 1
+            cs[atoms[i]][Harmonics.lm_index(ls[i], μi)] += w * p
+        end
     end
     return cs
 end

@@ -57,11 +57,13 @@ The single-site potential `V(e) = Σ_{l≥1, m} c[lm_index(l, m)]·Z_lm(e)`. `c`
 function _site_potential(c::AbstractVector{<:Real}, e::AbstractVector{<:Real})::Float64
     lmax = isqrt(length(c)) - 1
     v = 0.0
+    # `e` is a unit direction on every call site (quadrature / Fibonacci nodes, Metropolis
+    # iterates, render grid), so the unchecked harmonic is safe and skips the per-call norm.
     @inbounds for l = 1:lmax
         for m = -l:l
             ci = c[Harmonics.lm_index(l, m)]
             ci == 0 && continue
-            v += ci * Harmonics.Zlm(l, m, e)
+            v += ci * Harmonics.Zlm_unsafe(l, m, e)
         end
     end
     return v
@@ -79,7 +81,7 @@ function _l1_field(c::AbstractVector{<:Real})::SVector{3,Float64}
     @inbounds for m = -1:1
         cm = c[Harmonics.lm_index(1, m)]
         for d = 1:3
-            g[d] += cm * Harmonics.Zlm(1, m, axes[d])
+            g[d] += cm * Harmonics.Zlm_unsafe(1, m, axes[d])   # axes are unit
         end
     end
     return SVector{3,Float64}(g)
@@ -226,7 +228,7 @@ function _field_scale(c::AbstractVector{<:Real})::Float64
         z = 1 - 2 * (k + 0.5) / n
         r = sqrt(max(0.0, 1 - z * z))
         φ = ga * k
-        v = _site_potential(c, SVector{3,Float64}(r * cos(φ), r * sin(φ), z))
+        v = _site_potential(c, SVector{3,Float64}(r * cos(φ), r * sin(φ), z))   # unit by construction
         vmin = min(vmin, v)
         vmax = max(vmax, v)
     end
@@ -289,18 +291,35 @@ end
 
 function multipole_average(q::SphereQuadrature, c::AbstractVector{<:Real},
                            lmax::Integer)::Vector{Float64}
-    nlm = (Int(lmax) + 1)^2
+    L = Int(lmax)
+    nlm = (L + 1)^2
     acc = zeros(Float64, nlm)
+    zrow = Vector{Float64}(undef, nlm)   # Z_lm(e) tabulated once per node
     norm_z = 0.0
     @inbounds for t in eachindex(q.dirs)
         e = q.dirs[t]
-        p = q.weights[t] * exp(-_site_potential(c, e))
-        norm_z += p
-        acc[1] += p * Harmonics.Zlm(0, 0, e)
-        for l = 1:Int(lmax)
+        # Tabulate the harmonic row once: it was previously evaluated twice per node — once
+        # inside `_site_potential(c, e)` and again in the accumulation loop. Indices run
+        # contiguously 1..nlm in `lm_index` order, so `zrow` doubles as both.
+        zrow[1] = Harmonics.Zlm_unsafe(0, 0, e)
+        for l = 1:L
             for m = -l:l
-                acc[Harmonics.lm_index(l, m)] += p * Harmonics.Zlm(l, m, e)
+                zrow[Harmonics.lm_index(l, m)] = Harmonics.Zlm_unsafe(l, m, e)
             end
+        end
+        # V(e) = Σ_{l≥1,m} c[lm]·Z_lm(e), in `_site_potential`'s summation order and zero-skip.
+        v = 0.0
+        for l = 1:L
+            for m = -l:l
+                ci = c[Harmonics.lm_index(l, m)]
+                ci == 0 && continue
+                v += ci * zrow[Harmonics.lm_index(l, m)]
+            end
+        end
+        p = q.weights[t] * exp(-v)
+        norm_z += p
+        for k = 1:nlm
+            acc[k] += p * zrow[k]
         end
     end
     acc ./= norm_z

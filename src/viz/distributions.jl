@@ -67,7 +67,7 @@ function harmonic_basis(grid::SphereGrid, lmax::Integer)::Matrix{Float64}
         e = grid.dirs[i]
         for l = 1:Int(lmax)                              # column 1 (l=0) stays 0
             for m = -l:l
-                Z[i, Harmonics.lm_index(l, m)] = Harmonics.Zlm(l, m, e)
+                Z[i, Harmonics.lm_index(l, m)] = Harmonics.Zlm_unsafe(l, m, e)   # grid is unit
             end
         end
     end
