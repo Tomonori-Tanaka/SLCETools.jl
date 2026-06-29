@@ -8,6 +8,7 @@
 using Test
 using SCEFitting
 using SCETools
+using SCETools: MultipoleModel              # public, unexported (built via MFASampler(model))
 using LinearAlgebra
 using Random
 using StaticArrays

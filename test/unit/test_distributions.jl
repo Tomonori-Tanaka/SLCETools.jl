@@ -7,6 +7,7 @@
 using Test
 using SCEFitting
 using SCETools
+using SCETools: fibonacci_sphere, harmonic_basis, site_probabilities   # public, unexported
 using SCETools.VASP: read_poscar
 using LinearAlgebra
 using StaticArrays

@@ -32,7 +32,7 @@ Inherited from the core (`SCEFitting`'s `CLAUDE.md`); the ones this package lean
   columns atoms). The `reference` is the same layout.
 - **Real (tesseral) spherical harmonics `Zₗₘ`**, per-site factor `(4π)^(−1/2)`; an N-body
   SCE term carries `(4π)^(N/2)`. `multipole_terms` returns the **raw** fitted `jϕ`; this
-  package applies the `(4π)^(body/2)` scale once, in `MultipoleField(model)` (`sce_bridge.jl`).
+  package applies the `(4π)^(body/2)` scale once, in `MultipoleModel(model)` (`mfa/bridge.jl`).
 - **Reduced temperature `τ = T/T_MF`** with `T_MF = ρ/3` from the `l=1` (bilinear) Perron
   eigenvalue `ρ`, `β = 3/(ρτ)`. Scale invariance: only coupling *ratios* matter.
 - **Mean-field decoupling** `⟨∏ Z⟩ → ∏⟨Z⟩` (assumes distinct sites per cluster — asserted).
@@ -41,19 +41,19 @@ Inherited from the core (`SCEFitting`'s `CLAUDE.md`); the ones this package lean
 
 ## Coupled ("linked") code sites — change one, check all
 
-- **`sce_bridge.jl` ↔ the core's introspection contract** (`SCEFitting`'s
-  `sce/introspect.jl`): `MultipoleField(model)` consumes `multipole_terms` and applies
+- **`mfa/bridge.jl` ↔ the core's introspection contract** (`SCEFitting`'s
+  `sce/introspect.jl`): `MultipoleModel(model)` consumes `multipole_terms` and applies
   `coef·(4π)^(body/2)`; `ExchangeModel(model)` consumes `bilinear_terms` (the `3×3`
   bilinear / single-ion matrices). If a `MultipoleTerm` field or the scale convention
   changes upstream, this file moves with it. The regression gate is the P1–P4 suite
-  (`test/unit/test_{multipole,tensorial,exchange,mfa_sampler}.jl`): exact reduction to the
+  (`test/unit/test_{multipole,tensorial,exchange}.jl`): exact reduction to the
   single-global Langevin curve, scale invariance, and the many-body factorization check
   `V_a/β = ⟨E | e_a⟩` to machine precision.
-- **`site_engine.jl` ↔ `SCEFitting.Harmonics`** (`Zlm`, `lm_index`): the quadrature /
-  vMF / Metropolis kernels evaluate tesseral harmonics through the core submodule (bound
-  here by `import SCEFitting.Harmonics`). A normalization change upstream shifts every
-  multipole average.
-- **`exchange.jl` `_l1_coeffs!` / `_l2_coeffs!`** (field → tesseral coefficients) are the
+- **`mfa/engine.jl` (`MeanFieldEngine`) ↔ `SCEFitting.Harmonics`** (`Zlm`, `lm_index`): the
+  quadrature / vMF / Metropolis kernels evaluate tesseral harmonics through the core submodule
+  (bound here by `import SCEFitting.Harmonics`, on the unit-direction `Zlm_unsafe` fast path). A
+  normalization change upstream shifts every multipole average.
+- **`mfa/exchange.jl` `_l1_coeffs!` / `_l2_coeffs!`** (field → tesseral coefficients) are the
   *forward* of the core's `_l1_pair_matrix` / `_l2_onsite_matrix` (tesseral → `3×3`). The
   bilinear extraction uses the core's (inverse) matrices via `bilinear_terms`; do not
   duplicate that delicate conversion here.

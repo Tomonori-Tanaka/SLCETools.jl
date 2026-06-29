@@ -5,7 +5,7 @@ CurrentModule = SCETools
 ```
 
 [`ExchangeModel`](@ref) is the neutral carrier of the **bilinear** exchange (and single-ion
-anisotropy) the mean-field sampler needs. [`MultipoleField`](@ref) is its higher-order
+anisotropy) the mean-field sampler needs. [`MultipoleModel`](@ref) is its higher-order
 generalization, keeping **all** SCE channels. Both can be built by hand or extracted from a
 fitted `SCEPredictor`.
 
@@ -62,8 +62,8 @@ SALCs are dropped and reported via `@warn`. To keep **every** channel, use the f
 field:
 
 ```julia
-mf = MultipoleField(model)         # all clusters and l, higher-order / many-body
-s  = MFASampler(model; reference)  # ≡ MFASampler(MultipoleField(model); reference)
+mf = MultipoleModel(model)         # all clusters and l, higher-order / many-body
+s  = MFASampler(model; reference)  # ≡ MFASampler(MultipoleModel(model); reference)
 ```
 
 Both extractions read the fitted model through SCEFitting's public introspection surface
@@ -84,5 +84,5 @@ field, and the sampler warns when the reference is not stationary.
 
 ```@docs
 ExchangeModel
-MultipoleField
+MultipoleModel
 ```

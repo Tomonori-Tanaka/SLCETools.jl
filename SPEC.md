@@ -21,17 +21,27 @@ It never touches the SALC-basis internals (`model.basis.salc_basis.salcs`, `SALC
 ## Module layout
 
 ```
-src/SCETools.jl              # module: imports + includes + exports
-src/sampling/
-  site_engine.jl             # P0: single-site potential, vMF / Metropolis draws, quadrature
-  exchange.jl                # P2/P3: ExchangeModel + MultipoleField carriers, MFA self-consistency
-  mfa_sampler.jl             # P1–P4: MFASampler / MFASample, the `sample` verb, dispatch
-  sce_bridge.jl              # ExchangeModel / MultipoleField / MFASampler from a fitted SCEPredictor
+src/SCETools.jl              # module: imports + includes + the two export tiers
+src/mfa/
+  engine.jl                  # module MeanFieldEngine: single-site potential, vMF / Metropolis
+                             #   draws, sphere quadrature — pure on-sphere math, no SCE coupling
+  types.jl                   # the carrier / sampler structs + invariant-enforcing inner ctors:
+                             #   AbstractSampler, ExchangeModel, MultipoleModel, MFASampler{S}, MFASample
+  exchange.jl                # ExchangeModel construction + the longitudinal molecular-field analysis
+  selfconsistency.jl         # the Langevin closed forms + the three mean-field solvers (P2/P3/P4)
+  sampler.jl                 # the MFASampler constructors + the `sample` verb + dispatch
+  bridge.jl                  # ExchangeModel / MultipoleModel / MFASampler from a fitted SCEPredictor
 src/io/
   vasp.jl                    # module SCETools.VASP: the VASP adapter — read (read_poscar /
                              #   Oszicar) + write (write_poscar / write_incar / write_inputs)
-src/active_learning/         # planned (see below); empty until implemented
+src/viz/
+  grid.jl                    # the shared Fibonacci render grid + the tesseral basis matrix Z
+  distributions.jl           # per-atom single-site coefficients at one τ + a verification density
+  serialize.jl               # the self-describing JSON document (dependency-free emitter)
 ```
+
+The active-learning layer (see below) is planned but unimplemented; no placeholder
+directory exists yet — it will be created with its first file.
 
 `test/oracle/` is a separate environment (pinned Magesty.jl) that cross-checks the VASP
 POSCAR / OSZICAR parsers bit-for-bit against Magesty; run with
@@ -39,10 +49,21 @@ POSCAR / OSZICAR parsers bit-for-bit against Magesty; run with
 
 ## Public API (sampling)
 
-- Types: `AbstractSampler`, `MFASampler`, `MFASample`, `ExchangeModel`, `MultipoleField`.
-- Verb: `sample(sampler, τ; …)` → `MFASample` (configurations, per-atom magnetizations).
-- Helpers: `mfa_temperature_scale`, `mfa_sublattice_m`, `thermal_averaged_m`,
-  `tau_from_magnetization`.
+The export surface is tiered (mirroring `SCEFitting`): a lean exported workflow plus a
+*public but unexported* tier reached by qualification (`SCETools.<name>`).
+
+- **Exported** — `AbstractSampler`, `MFASampler`, `MFASample`, `ExchangeModel`, `sample`;
+  the helpers `mfa_temperature_scale`, `mfa_sublattice_m`, `thermal_averaged_m`,
+  `tau_from_magnetization`; and the viz output `SiteDistributionField`,
+  `mfa_site_coefficients`, `write_mfa_distributions`.
+- **Public, unexported** — `MultipoleModel` (the full-multipole digest; usually built via
+  `MFASampler(model)`); the viz plumbing `SphereGrid` / `fibonacci_sphere` /
+  `harmonic_basis` / `site_probabilities`; and the engine kernels under
+  `SCETools.MeanFieldEngine`.
+
+`sample(sampler, τ; …)` → `MFASample` (configurations, per-atom magnetizations).
+`MFASampler{S}` is parametric on its coupling source (`Nothing` / `ExchangeModel` /
+`MultipoleModel`) so the draw-path dispatch is type-stable.
 
 Construction fidelity ladder: `MFASampler(reference)` (single global isotropic) →
 `MFASampler(ExchangeModel(...); reference)` (multi-sublattice isotropic / tensorial) →
@@ -65,9 +86,10 @@ is the identity:
 See `docs/specs/mfa-sampling.md` for the design (decisions D1–D5, phases P0–P4) and the
 physical conventions (`τ = T/T_MF`, `T_MF = ρ/3`, mean-field decoupling, vMF / Bingham).
 
-## Planned — active-learning layer (`src/active_learning/`)
+## Planned — active-learning layer (a future `src/active_learning/`)
 
-Not yet implemented; design intent recorded so the package is laid out for it.
+Not yet implemented (no placeholder directory — created with its first file); design intent
+recorded so the package is laid out for it.
 
 An efficient SCE model-construction loop, closing the sample → label → refit cycle:
 

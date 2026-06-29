@@ -333,11 +333,11 @@ All resolved. Conservative, exactness-leaning defaults with opt-in escapes/exten
 
 ## 10. Task list (coarse)
 
-- [x] **P0 single-site engine** (`src/sampling/site_engine.jl`): potential eval, vMF
+- [x] **P0 single-site engine** (`src/mfa/engine.jl`): potential eval, vMF
       closed form, symmetric-proposal Metropolis, field-aware Gauss–Legendre × azimuth
       quadrature for `⟨Z_lm⟩`. Tests: all three paths reproduce Langevin `L(κ)`, Metropolis
       matches quadrature on a non-vMF `l=2` field, quadrature auto-sizes to sharp peaks.
-- [x] **P1 single global, isotropic** (`src/sampling/mfa_sampler.jl`): `AbstractSampler`
+- [x] **P1 single global, isotropic** (`src/mfa/sampler.jl`): `AbstractSampler`
       seam, `MFASampler(reference)`, the `MFASample` labeled output (D1), and the `sample`
       verb (scalar `n` form + collection sweep). Langevin self-consistency `m = L(3m/τ)`
       via self-written bisection (no Roots dep); `τ ↔ m` inversion; `mfa_temperature_scale`
@@ -345,7 +345,7 @@ All resolved. Conservative, exactness-leaning defaults with opt-in escapes/exten
       self-consistency residual + inverse round-trip, ordered / near-uniform boundary
       limits, drawn configs carry `⟨cosθ⟩ = m(τ)`, reproducibility. Numerically equivalent
       to Magesty's `MfaSampling`.
-- [x] **P2 multi-sublattice, isotropic** (`src/sampling/exchange.jl`): `ExchangeModel`
+- [x] **P2 multi-sublattice, isotropic** (`src/mfa/exchange.jl`): `ExchangeModel`
       (symmetric `Jiso[a,b] = Σ_R J_iso(a,b,R)`, from a fitted SCE via the Sunny bilinear
       extraction `tr(M)/3`, or a raw matrix) + the coupled per-atom self-consistency
       `m_a = L(3(Ā m)_a/τ)` with the normalized molecular-field matrix `Ā = A/ρ`,
@@ -356,7 +356,7 @@ All resolved. Conservative, exactness-leaning defaults with opt-in escapes/exten
       single-global Langevin curve for a uniform ferro/antiferromagnet, ferrimagnet gives
       distinct sublattice collapse rates at one `T_MF`, scale invariance (`max|Δm| ≈ 1e-12`),
       free-spin handling, SCE extraction + dropped-channel warnings.
-- [x] **P3 tensorial** (`src/sampling/exchange.jl`, `exchange_from_sce.jl`): the full
+- [x] **P3 tensorial** (`src/mfa/{exchange,selfconsistency}.jl`, `bridge.jl`): the full
       bilinear tensor `S_ab` (Heisenberg + DMI + anisotropic) and single-ion `A_a` (`ls=[2]`),
       from a fitted SCE (only higher-order channels dropped) or a raw `bilinear`/`onsite`.
       Single-site potential `V_a(e) = β(e·g_a + e' A_a e)`, `g_a = Σ_b S_ab m_b ê_b`,
@@ -368,8 +368,8 @@ All resolved. Conservative, exactness-leaning defaults with opt-in escapes/exten
       **Noncollinear references** (rigid-axis D2, with a stationarity warning). Tests:
       easy-axis cone sharpening / above-`T_MF` persistence, easy-plane girdle, Metropolis ↔
       quadrature agreement on `⟨Z_2m⟩`, DMI tilt of a collinear reference, the τ → 0 limit.
-- [x] **P4 full multipole MFA** (`src/sampling/exchange.jl`, `exchange_from_sce.jl`):
-      `MultipoleField` digests **every** SCE cluster term; the generalized molecular field
+- [x] **P4 full multipole MFA** (`src/mfa/{exchange,selfconsistency}.jl`, `bridge.jl`):
+      `MultipoleModel` digests **every** SCE cluster term; the generalized molecular field
       `h_a^{lm} = Σ_φ jφ·(4π)^(N/2)·folded · ∏_{b≠a} ⟨Z_{l_b}^{m_b}(e_b)⟩` is built by
       `_site_coeffs_all!` (the `accumulate_grad!` leave-one-out structure with the site-a
       harmonic left symbolic). The order parameters are the **full per-atom multipole

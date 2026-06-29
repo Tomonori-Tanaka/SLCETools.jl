@@ -58,16 +58,29 @@ include("viz/grid.jl")
 include("viz/distributions.jl")
 include("viz/serialize.jl")
 
-# Mean-field spin-configuration sampling (docs/specs/mfa-sampling.md).
-export AbstractSampler, MFASampler, MFASample, ExchangeModel, MultipoleModel, sample,
-    mfa_temperature_scale, mfa_sublattice_m, thermal_averaged_m, tau_from_magnetization
+# --- Public API (exported) --------------------------------------------------------
+# The mean-field sampling workflow a user reaches for. The coupling-model digest, the engine
+# primitives, and the viz render plumbing are *public but unexported* — see the block below.
+
+# the sampler, the carrier the user hand-builds, and the `sample` verb
+export AbstractSampler, MFASampler, MFASample, ExchangeModel, sample
+# reduced-temperature ↔ magnetization helpers
+export mfa_temperature_scale, mfa_sublattice_m, thermal_averaged_m, tau_from_magnetization
+# per-atom MFA distribution export (the viz output a user calls)
+export SiteDistributionField, mfa_site_coefficients, write_mfa_distributions
 
 # Deprecated alias: `MultipoleModel` was named `MultipoleField` before v0.2 (it is a coupling
 # model, the full-fidelity sibling of `ExchangeModel`, not a field). Kept one minor version.
 Base.@deprecate_binding MultipoleField MultipoleModel
 
-# Per-atom MFA probability distribution export (viz/distributions.jl).
-export SiteDistributionField, SphereGrid, fibonacci_sphere, mfa_site_coefficients,
-    harmonic_basis, site_probabilities, write_mfa_distributions
+# --- Public, unexported -----------------------------------------------------------
+# Reachable as `SCETools.<name>` (and documented), but kept out of the flat `using` namespace.
+# The headline workflow (`MFASampler` / `sample` / `ExchangeModel` / `write_mfa_distributions`)
+# already drives them. Power users and the test suite reach them by qualification.
+#
+#   coupling digest : MultipoleModel        (built via `MFASampler(model)`; rarely hand-made)
+#   viz plumbing    : SphereGrid, fibonacci_sphere, harmonic_basis, site_probabilities
+#   engine kernels  : SCETools.MeanFieldEngine.{sphere_quadrature, multipole_average,
+#                     sample_vmf, sample_vmf_field, sample_site_metropolis, SphereQuadrature}
 
 end # module SCETools

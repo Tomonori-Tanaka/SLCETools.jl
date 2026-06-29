@@ -6,6 +6,46 @@ release, so everything lives under *Unreleased*.
 
 ## [Unreleased]
 
+### Changed — review-driven refactor (Tier 0 fixes, Tier 1 hot path, Tier 2 structure)
+
+A four-axis review (numerical, generalist, performance, ideal-package) drove a tiered
+refactor. Breaking changes are confined to internals and one renamed type; the headline
+`MFASampler` / `sample` / `ExchangeModel` / `write_mfa_distributions` / `SCETools.VASP`
+path is unchanged. Unit count 377 → 500; Aqua + JET green.
+
+**Tier 0 — correctness / edge cases** (none affecting normal-operation results):
+- Ordered limit (`τ → 0`): the saturated order parameter `m → 1` is now gated on a nonzero
+  *l=1* molecular field, not on single-ion presence. A purely single-ion (even-l) atom has
+  an `e → −e` symmetric distribution, so `⟨e·ê_a⟩ → 0` — reporting `m = 1` was wrong.
+- `sample_vmf` returns `μ` directly for `κ = Inf`, avoiding a NaN when `rand()` returns 0.0.
+- The JSON emitter escapes `\n \r \t` and all control characters (RFC 8259).
+- Each drawn config gets its own `m` vector (no aliasing across co-τ draws); `MFASample`
+  gains `firstindex` / `lastindex`. Dropped the unused `Diagonal` / `det` imports.
+
+**Tier 1 — bit-identical hot path** (verified against the `V_a/β = ⟨E|e_a⟩` machine-precision
+gate and the Langevin reduction):
+- `multipole_average` tabulates `Z_lm(e)` once per quadrature node (was evaluated twice).
+- Internal unit-direction paths use `Harmonics.Zlm_unsafe`, skipping the per-call norm check.
+- The many-body `_site_coeffs_all!` dispatches each term through a rank-specialized barrier.
+
+**Tier 2 — public API / structure** (breaking):
+- **Export tiering**: a lean exported workflow plus a *public but unexported* tier
+  (`MultipoleModel`, `SphereGrid`, `fibonacci_sphere`, `harmonic_basis`, `site_probabilities`,
+  and the `SCETools.MeanFieldEngine` kernels), reached by qualification.
+- **`MultipoleField` → `MultipoleModel`** (a coupling model, the full-fidelity sibling of
+  `ExchangeModel`, not a field); `Base.@deprecate_binding` keeps the old name one minor version.
+- **`MFASampler{S}`** is now parametric on its coupling source (single `source::S` field,
+  `S ∈ {Nothing, ExchangeModel, MultipoleModel}`), replacing the two `Union{Nothing,…}` fields;
+  the draw-path dispatch is type-stable (no `::` assertions).
+- **Inner constructors** enforce invariants and are the only build path (`ExchangeModel`,
+  `MultipoleModel`, `MFASampler`, `MFASample`); the bridge copies the core's introspection
+  arrays so a `MultipoleModel` never aliases the fitted model's internals.
+- **File reorg**: `sampling/` → `mfa/` with the single-site engine promoted to a
+  `module MeanFieldEngine` (`mfa/engine.jl`); the 475-line `exchange.jl` split into
+  `types.jl` / `exchange.jl` / `selfconsistency.jl`; `viz/distributions.jl` split into
+  `grid.jl` / `distributions.jl` / `serialize.jl`. Removed the empty `active_learning/`
+  placeholder (it returns with its first file).
+
 ### Changed — follow the `SCEFitting` public-API rename
 
 Track `SCEFitting`'s breaking public-API rename: the bridge and VASP adapter now use

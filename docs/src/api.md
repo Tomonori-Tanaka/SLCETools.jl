@@ -23,7 +23,7 @@ MFASample
 
 ## Carriers and helpers
 
-The [`ExchangeModel`](@ref) / [`MultipoleField`](@ref) carriers are documented under
+The [`ExchangeModel`](@ref) / [`MultipoleModel`](@ref) carriers are documented under
 [Exchange models](guide/exchange_models.md); the τ ↔ m helpers
 ([`thermal_averaged_m`](@ref), [`tau_from_magnetization`](@ref), [`mfa_sublattice_m`](@ref),
 [`mfa_temperature_scale`](@ref)) under [Sampling](guide/sampling.md).

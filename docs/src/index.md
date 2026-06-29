@@ -36,7 +36,7 @@ fidelity:
 
 The [`ExchangeModel`](@ref) carrier can be built by hand (raw couplings, or a TB2J-style
 ``J_{ij}`` tensor) or extracted from a fitted `SCEPredictor`; the full
-[`MultipoleField`](@ref) path keeps every channel.
+[`MultipoleModel`](@ref) path keeps every channel.
 
 ## Documentation
 

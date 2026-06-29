@@ -27,7 +27,7 @@ single-site law the spins are drawn from (see [Theory](../theory/mfa.md)):
   higher-multipole shape — drawn with a Metropolis engine.
 
 See [Exchange models](exchange_models.md) for building the [`ExchangeModel`](@ref) /
-[`MultipoleField`](@ref) carriers.
+[`MultipoleModel`](@ref) carriers.
 
 ## The `sample` verb
 
