@@ -28,8 +28,11 @@ it is portable and avoids the native-VTK `Segmentation fault: 11` some setups hi
    A self-contained HTML opens in the browser; drag to orbit, scroll to zoom. Each atom is
    drawn as a sphere **coloured by** the orientation probability `P(e) ∝ exp(−V_a(e))` (a
    heatmap on a true sphere by default); the green arrow is the mean moment (shaft + head,
-   length ∝ the order parameter `m_a`), the gray box is the unit cell, and a VESTA-style
-   x/y/z arrow triad sits just outside it.
+   length ∝ `|m_a|`, updated per τ frame), the gray box is the unit cell, and a VESTA-style
+   x/y/z arrow triad sits just outside it. The arrow is a **magnitude-only** indicator drawn
+   along the fixed reference axis: the JSON carries signed `m`, but an anti-aligned
+   sublattice (`m_a < 0`, possible off a non-stationary reference) renders the same as an
+   aligned one — read the sign from the sphere colouring, not the arrow.
 
    Two in-figure sliders: the **τ slider** (temperature sweep) and the **arrow-size slider**
    (0×–5× the moment arrows; 0× hides them).

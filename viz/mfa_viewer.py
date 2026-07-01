@@ -223,13 +223,23 @@ def build_figure(doc, args):
     base_meshes = frame_mesh_traces(doc, Z, faces, directions, 0, args, clim_of(0))
     fig = go.Figure(data=base_meshes + static)
 
-    # animate only the mesh traces (indices 0..natoms-1); overlays stay put
+    # animate the mesh traces AND the moment arrows: the density spheres get their
+    # per-frame coefficients, and every arrow-size group is rebuilt from that frame's
+    # per-atom |m| so the arrow length tracks the order parameter across the τ slider
+    # (it used to stay frozen at frames[0]'s m). The frame traces carry coordinates
+    # only — `visible` is never set on them — so the arrow-size slider's visibility
+    # toggling of the static traces keeps working.
+    arrow_idx = [i for _, idxs in arrow_groups for i in idxs]
     go_frames = []
     for k in range(len(frames)):
-        go_frames.append(go.Frame(
-            name=str(k),
-            data=frame_mesh_traces(doc, Z, faces, directions, k, args, clim_of(k)),
-            traces=list(range(natoms))))
+        data = frame_mesh_traces(doc, Z, faces, directions, k, args, clim_of(k))
+        if arrow_groups:
+            mk = np.asarray(frames[k]["m"], float)
+            for mu, _ in arrow_groups:
+                data += moment_arrow_traces(positions, reference, mk,
+                                            base_len * mu, args.head_frac)
+        go_frames.append(go.Frame(name=str(k), data=data,
+                                  traces=list(range(natoms)) + arrow_idx))
     fig.frames = go_frames
 
     sliders = []
