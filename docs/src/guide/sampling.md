@@ -44,7 +44,11 @@ sample(sampler; m = [0.2, 0.5, 0.8], nsamples = 50)
 ```
 
 Either fix the reduced temperature `tau` or the target magnetization `m` (the sampler
-inverts ``m \leftrightarrow \tau`` for you). Both forms accept:
+inverts ``m \leftrightarrow \tau`` for you). The `m` control is only meaningful for the
+**single global** sampler, where one Langevin magnetization maps to a unique ``\tau``; a
+coupled (exchange-model / multipole) sampler has distinct per-atom ``m_a(\tau)``, so
+control it by `tau` and read the per-atom magnetizations off `samp.m` (or
+[`mfa_sublattice_m`](@ref)). Both forms accept:
 
 | Keyword | Meaning |
 |---|---|

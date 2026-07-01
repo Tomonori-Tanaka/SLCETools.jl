@@ -56,9 +56,9 @@ data = read_configs(src)                                 # Vector{SpinDatum}
 println("read_configs → ", length(data), " configurations")
 d = data[1]
 println("  config 1: energy = ", d.energy, " eV, |m| = ", round.(d.magmoms; digits = 3))
-println("  torque target τ_a = −m_a×B_a (eV), atom 1 = ", round.(d.torques[:, 1]; digits = 5))
+println("  torque target τ_a = m_a×B_a (eV), atom 1 = ", round.(d.torques[:, 1]; digits = 5))
 
-basis = SCEBasis(crystal, Interaction(; nbody = 2, pair_cutoff = 2.5, lmax = [1], isotropy = true))
+basis = SCEBasis(crystal, BasisSpec(; nbody = 2, pair_cutoff = 2.5, lmax = [1], isotropy = true))
 dataset = SCEDataset(basis, src)                         # source → dataset (read under the hood)
 f = fit(SCEFit, dataset, OLS(); torque_weight = 0.3)
 println("\nfit completed on ", nobs(f), " configs, ", n_salcs(basis), " coefficient(s)")

@@ -33,11 +33,12 @@ using LinearAlgebra, Random, Statistics
 lat   = Lattice([8.0 0 0; 0 8.0 0; 0 0 10.0])
 frac  = [0 0 0 0; 0 0 0 0; 0.0 0.25 0.5 0.75]
 chain = Crystal(lat, frac, [1, 1, 1, 1], ["Fe"])
-basis = SCEBasis(chain, Interaction(; nbody = 2, pair_cutoff = 2.6, lmax = [1], isotropy = true))
+basis = SCEBasis(chain, BasisSpec(; nbody = 2, pair_cutoff = 2.6, lmax = [1], isotropy = true))
 
-# A fitted model: one Heisenberg SALC, a negative coefficient ⇒ ferromagnetic along the
-# reference. (In practice `jphi` comes from `fit`; here we just set it.)
-model = SCEPredictor(basis, 0.0, [-0.02], basis.salc_basis.keys)
+# A fitted model: the first SALC (the nearest-neighbour Heisenberg bond) carries a
+# negative coefficient ⇒ ferromagnetic along the reference; the other SALCs stay zero.
+# (In practice `jphi` comes from `fit`; here we just set it.)
+model = SCEPredictor(basis, 0.0, vcat([-0.02], zeros(n_salcs(basis) - 1)))
 nothing # hide
 ```
 

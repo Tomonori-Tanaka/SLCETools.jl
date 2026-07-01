@@ -31,7 +31,6 @@ makedocs(;
         ],
         "API reference" => "api.md",
     ],
-    warnonly = true,
     checkdocs = :exports,
     doctest = false,
 )

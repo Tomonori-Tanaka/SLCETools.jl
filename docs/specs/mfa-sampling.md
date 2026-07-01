@@ -4,7 +4,9 @@
 (see [Decisions](#8-decisions)). Implementation proceeds in phases P0–P5 (§7).
 **P0 (engine), P1 (single global isotropic), P2 (multi-sublattice isotropic), P3
 (tensorial exchange + single-ion, noncollinear), and P4 (full multipole / many-body)
-are landed**; only P5 (sources & I/O) remains.
+are landed**, as are the P5 DFT writers, the POSCAR / OSZICAR readers
+(`SCETools.VASP`), and the Documenter site; the remaining P5 items are the VASP
+reference reader (POSCAR + `MAGMOM`) and the external `Jij` (TB2J) reader.
 
 **Goal.** Generate physically representative finite-temperature spin
 configurations for SCE training, instead of purely random (paramagnetic-limit)
@@ -105,8 +107,9 @@ AbstractSampler            # dispatch seam; future Metropolis-MC / spin-spiral s
  └─ MFASampler             # single-site mean-field sampler (this spec)
 
 ExchangeModel              # neutral bilinear+single-ion carrier (tensorial 𝓙_ij, A_i)
- ├─ from an SCEPredictor       # isotropic+DMI+anisotropic bilinear via the to_sunny extraction; single-ion via ls=[2]
- └─ from external Jij      # (i, j, R, 𝓙::SMatrix{3,3}) lists (Lichtenstein / TB2J)
+ ├─ from an SCEPredictor   # isotropic+DMI+anisotropic bilinear via the core's public
+ │                         #   `bilinear_terms` extraction; single-ion via ls=[2]
+ └─ from external Jij      # (i, j, R, 𝓙::SMatrix{3,3}) lists (Lichtenstein / TB2J) — planned
 
 sample(sampler; …) -> configs    # the one verb; returns 3×n_atoms unit-direction matrices
 ```
@@ -127,16 +130,29 @@ The single-site engine is shared by all three:
   field is purely `l = 1` (isotropic).
 - **`:metropolis`** — single-site Metropolis on `H_a^MF(e_a)`. General: handles
   DMI, anisotropy, and any higher-order single-site potential with no special-casing.
+  The proposal is a **symmetric two-component mixture**: with probability
+  `_METROPOLIS_FLIP_FRACTION = 0.2` the antipodal flip `e → −e`, otherwise a random
+  rotation about a uniform axis by `θ ∼ step·N(0,1)` (Rodrigues). The flip is needed
+  because a rotation-only proposal cannot cross the equatorial barrier of a strongly
+  bimodal (e ↔ −e symmetric single-ion double-well) potential once `step` shrinks below
+  the barrier width — the chain stays trapped in its starting lobe and every odd
+  multipole of the draw is silently biased (the even `Z_2m` cross-checks still pass).
+  The flip restores inter-lobe ergodicity; on an asymmetric (`l = 1`-dominated) well it
+  is simply rejected with the correct Boltzmann weight `e^{−ΔV}`. Both components are
+  symmetric (an involution / a symmetric-angle rotation about a uniform axis), so the
+  mixture keeps detailed balance.
 
 The mean-field self-consistency for `{⟨Z_lm⟩_a}` is solved by deterministic sphere
 quadrature (accurate), and the final configuration draws use the engine above.
 
 ### Reuse of existing machinery
 
-- **`to_sunny` / `_l1_pair_matrix` / `_l2_onsite_matrix`** already extract the full
-  3×3 per-bond bilinear matrix (iso + DMI + anisotropic) and the single-ion matrix
-  from an `SCEPredictor`. `ExchangeModel(model)` is essentially that extraction without
-  the Sunny assembly.
+- **The core's public introspection surface `bilinear_terms` / `multipole_terms`**
+  (read by `src/mfa/bridge.jl`) already extracts the full 3×3 per-bond bilinear matrix
+  (iso + DMI + anisotropic) and the single-ion matrix from an `SCEPredictor` — the
+  underlying `_l1_pair_matrix` / `_l2_onsite_matrix` formulas live upstream in the
+  core's `sce/bilinear.jl`. `ExchangeModel(model)` consumes that extraction directly;
+  `MultipoleModel(model)` consumes `multipole_terms`.
 - **`evaluate` / `accumulate_grad!`** (the folded-tensor contraction kernels) compute
   `h_a^{lm}` by contracting `folded` against neighbor multipoles `⟨Z_b⟩` while leaving
   site `a`'s axis free — the same kernel structure, neighbor `Z(e_b)` replaced by
@@ -163,7 +179,7 @@ samp    = sample(sampler, 200; m = 0.8, rng = rng)                    # by magne
 
 # ── per-sublattice MFA from a tensorial exchange model ───────────────────────
 exch    = ExchangeModel(scemodel)                # iso + DMI + anisotropic bilinear + single-ion
-exch    = ExchangeModel(crystal, bonds; onsite)  # external: bonds = (i, j, R, 𝓙::SMatrix{3,3}); onsite = A_i
+exch    = ExchangeModel(crystal, bonds; onsite)  # external: bonds = (i, j, R, 𝓙::SMatrix{3,3}); onsite = A_i  (planned — D5)
 sampler = MFASampler(exch; reference = seed)     # or reference = "POSCAR" (VASP MAGMOM)
 samp    = sample(sampler; tau = range(0.1, 0.95; length = 10), nsamples = 20, rng = rng)
 
@@ -222,8 +238,9 @@ independently from `P(e_a) ∝ exp(−β H_a^MF(e_a))` via the `:vmf` fast path
 ## 5. Sources and I/O
 
 - **SCE model → `ExchangeModel` / direct `SCEPredictor` sampler.** The “simple SCE near a
-  reference state” path. Bilinear extraction reuses `to_sunny`; full multipole uses
-  the model directly.
+  reference state” path. The bilinear extraction reads the core's public
+  `bilinear_terms`; the full multipole path reads `multipole_terms`
+  (both in `src/mfa/bridge.jl`).
 - **External `Jij` → `ExchangeModel`.** A neutral `(i, j, R, 𝓙::SMatrix{3,3})` +
   on-site `A_i` constructor. First external reader target: **TB2J** (Lichtenstein
   tensorial `Jij`; already vendored under `~/Packages`).
@@ -245,9 +262,10 @@ independently from `P(e_a) ∝ exp(−β H_a^MF(e_a))` via the `:vmf` fast path
 - Tesseral harmonics `Z_lm` and the `(4π)^(N/2)` scale are shared with the basis;
   the molecular-field contraction must use the **same** `Z_lm` and folded-tensor
   conventions as `evaluate` (linked site — change one, check both).
-- The exchange extraction shares the `to_sunny` matrix formulas and their energy-
-  reconstruction gate (`_reconstruct_energy ≈ predict_energy − j0`): if the harmonic
-  normalization or the `(4π)^(N/2)` scale moves, both move together.
+- The exchange extraction reads the core's public `bilinear_terms`, whose matrix
+  formulas (`_l1_pair_matrix` / `_l2_onsite_matrix`, in the core's `sce/bilinear.jl`)
+  carry an energy-reconstruction gate (`_reconstruct_energy ≈ predict_energy − j0`): if
+  the harmonic normalization or the `(4π)^(N/2)` scale moves, both move together.
 - Reference equilibrium: the molecular field at the reference should be parallel to
   `ê_a`. The sampler **verifies** this and warns when the supplied reference is not a
   stationary state of the model (the rigid-direction MFA is then inconsistent).
@@ -304,8 +322,11 @@ All resolved. Conservative, exactness-leaning defaults with opt-in escapes/exten
   (the MFA scale is not quantitative); `mfa_temperature_scale(sampler)` returns `T_MF`
   so a caller can convert `T = τ·T_MF` themselves if the coupling scale is trustworthy.
 - **D5 — External reader: raw constructor always, TB2J first.**
-  `ExchangeModel(crystal, bonds; onsite)` (raw `(i,j,R,𝓙)` + `A_i`) is always available;
-  a **TB2J** reader (Lichtenstein tensorial `Jij`) lands in P5. Other formats on demand.
+  `ExchangeModel(crystal, bonds; onsite)` (raw `(i,j,R,𝓙)` + `A_i`) is the intended
+  always-available entry (**not yet implemented** — today's constructors take the
+  summed `Jiso` / `bilinear` matrices or a fitted `SCEPredictor`); a **TB2J** reader
+  (Lichtenstein tensorial `Jij`) lands with the remaining P5 work. Other formats on
+  demand.
 
 ---
 
@@ -334,7 +355,8 @@ All resolved. Conservative, exactness-leaning defaults with opt-in escapes/exten
 ## 10. Task list (coarse)
 
 - [x] **P0 single-site engine** (`src/mfa/engine.jl`): potential eval, vMF
-      closed form, symmetric-proposal Metropolis, field-aware Gauss–Legendre × azimuth
+      closed form, symmetric two-component-proposal Metropolis (random rotation mixed
+      with an antipodal flip — §2), field-aware Gauss–Legendre × azimuth
       quadrature for `⟨Z_lm⟩`. Tests: all three paths reproduce Langevin `L(κ)`, Metropolis
       matches quadrature on a non-vMF `l=2` field, quadrature auto-sizes to sharp peaks.
 - [x] **P1 single global, isotropic** (`src/mfa/sampler.jl`): `AbstractSampler`
@@ -346,8 +368,9 @@ All resolved. Conservative, exactness-leaning defaults with opt-in escapes/exten
       limits, drawn configs carry `⟨cosθ⟩ = m(τ)`, reproducibility. Numerically equivalent
       to Magesty's `MfaSampling`.
 - [x] **P2 multi-sublattice, isotropic** (`src/mfa/exchange.jl`): `ExchangeModel`
-      (symmetric `Jiso[a,b] = Σ_R J_iso(a,b,R)`, from a fitted SCE via the Sunny bilinear
-      extraction `tr(M)/3`, or a raw matrix) + the coupled per-atom self-consistency
+      (symmetric `Jiso[a,b] = Σ_R J_iso(a,b,R)`, from a fitted SCE via the core's public
+      `bilinear_terms` extraction, `tr(M)/3`, or a raw matrix) + the coupled per-atom
+      self-consistency
       `m_a = L(3(Ā m)_a/τ)` with the normalized molecular-field matrix `Ā = A/ρ`,
       `A[a,b] = −Jiso[a,b](ê_a·ê_b)` (folding the reference makes ferro/antiferro/ferri
       ferromagnetic in the magnitudes), `T_MF = ρ/3` from the Perron eigenvalue, per-atom
@@ -364,7 +387,8 @@ All resolved. Conservative, exactness-leaning defaults with opt-in escapes/exten
       The l=2 single-ion gives a **Bingham** single-site shape (closed-form vMF cannot
       represent it), so the self-consistency `m_a = ⟨e·ê_a⟩` uses the quadrature and the
       draw uses the **Metropolis** engine. Tesseral-coefficient conversions (`_l1_coeffs!`/
-      `_l2_coeffs!`, exact inverses of the Sunny `_l1_pair_matrix`/`_l2_onsite_matrix`).
+      `_l2_coeffs!`, exact inverses of the core's `_l1_pair_matrix`/`_l2_onsite_matrix` in
+      `sce/bilinear.jl`; the constants are bound to `SCEFitting.Harmonics.N1/A2/B2`).
       **Noncollinear references** (rigid-axis D2, with a stationarity warning). Tests:
       easy-axis cone sharpening / above-`T_MF` persistence, easy-plane girdle, Metropolis ↔
       quadrature agreement on `⟨Z_2m⟩`, DMI tilt of a collinear reference, the τ → 0 limit.
@@ -380,7 +404,11 @@ All resolved. Conservative, exactness-leaning defaults with opt-in escapes/exten
       invariance, and — the headline — the many-body factorization checked against the
       conditional mean SCE energy `⟨E|e_a⟩` of a biquadratic model (matches to ~MC noise;
       a deterministic cross-check confirms `V_a/β = ⟨E|e_a⟩` to machine precision).
-- [ ] P5 VASP reference reader; external `Jij` (TB2J); optional DFT writers.
-- [ ] Docs: a Documenter guide page + a tutorial; design-note cross-reference.
+- [x] P5 DFT-input writers (`SCETools.VASP.write_incar` / `write_inputs` /
+      `write_poscar`) and the POSCAR / OSZICAR readers (`read_poscar`, `Oszicar`) —
+      landed in `src/io/vasp.jl`, gated by `test/unit/test_vasp*.jl` + `test/oracle/`.
+- [ ] P5 (remaining): VASP reference reader (POSCAR + `MAGMOM`); external `Jij` (TB2J).
+- [x] Docs: the Documenter site (Home, Getting started, Guide, Theory, API) under
+      `docs/`, including a getting-started tutorial; this spec is cross-referenced.
 
 Design decisions D1–D5 are settled (§8).

@@ -46,6 +46,7 @@ The [`ExchangeModel`](@ref) carrier can be built by hand (raw couplings, or a TB
 | [Guide: sampling](guide/sampling.md) | The `sample` verb, the fidelity ladder, `MFASample`, the τ ↔ m helpers |
 | [Guide: exchange models](guide/exchange_models.md) | Building an `ExchangeModel` by hand or from a fitted `SCEPredictor` |
 | [Guide: VASP I/O](guide/vasp.md) | Read DFT training data (POSCAR / OSZICAR) and write constrained-noncollinear INCAR / input sets |
+| [Guide: orientation distributions](guide/distributions.md) | Export the per-atom single-site distributions for the interactive sphere viewer |
 | [Theory: the mean-field sampler](theory/mfa.md) | The MFA decoupling, reduced temperature, vMF / Bingham single-site laws |
 | [API reference](api.md) | Every exported type and function |
 
@@ -57,6 +58,6 @@ packages remain in use against the original `Magesty.jl` and are not targeted he
 
 ## Planned
 
-`src/active_learning/` is laid out for an efficient model-construction loop — propose
-configurations with the sampler, label them with DFT, refit the SCE model, iterate. See the
-package `SPEC.md`.
+An active-learning layer (a future `src/active_learning/` — planned, not yet implemented)
+will close an efficient model-construction loop: propose configurations with the sampler,
+label them with DFT, refit the SCE model, iterate. See the package `SPEC.md`.

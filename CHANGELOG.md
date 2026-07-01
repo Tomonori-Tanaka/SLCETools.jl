@@ -6,6 +6,65 @@ release, so everything lives under *Unreleased*.
 
 ## [Unreleased]
 
+### Fixed — Metropolis lobe-trapping bias (the flip proposal)
+
+- **The single-site Metropolis engine gained an antipodal-flip proposal** (`e → −e` with
+  probability 0.2, else the random rotation; both components symmetric, so detailed
+  balance holds). A rotation-only chain started at `+ê_a` could not cross the equator
+  barrier of a strongly bimodal potential — an `e ↔ −e` symmetric single-ion double-well,
+  exactly the `m → 0` regime near/above `T_MF` or a single-ion-only atom — so the drawn
+  ensemble sampled one lobe: every odd multipole was silently biased (⟨e·ê⟩ ≈ +1 where
+  the label said `m ≈ 0`) while the even `⟨Z_2m⟩` cross-checks kept passing. On an
+  asymmetric (l=1-dominated) well the flip is simply rejected with weight `e^{−ΔV}`, so
+  ordered-regime draws are unaffected. New regression gates: a deep double-well engine
+  test (⟨e_z⟩ ≈ 0, ⟨Z_20⟩ ↔ quadrature) and a sampled single-ion-only atom whose ensemble
+  now matches its own `m ≈ 0` label. Metropolis RNG streams change; seeded runs remain
+  reproducible.
+- **The viewer's mean-moment arrows now update with the τ slider** (`viz/mfa_viewer.py`):
+  the animation frames only re-sent the density meshes, so the arrows stayed frozen at the
+  first frame's `m` for every τ. Each frame now rebuilds every arrow-size group from that
+  frame's per-atom `|m|` (visibility is left to the arrow-size slider). The README notes
+  the arrow is a magnitude-only indicator (signed `m` is in the JSON; read the sign from
+  the sphere colouring).
+
+### Changed (breaking) — pre-registration API polish
+
+- **The deprecated `MultipoleField` binding is removed** (unreleased package; the cheap
+  window is now). Use `MultipoleModel`.
+- **`MeanFieldEngine` renames**: `_site_potential` → `site_potential`, `_field_scale` →
+  `field_scale` — they were de-facto public (viz layer, docs, tests) while `_`-prefixed,
+  and the submodule exported `_` names (a private-marker / export contradiction). The
+  engine now exports only the public primitives; the remaining `_` internals are imported
+  by the parent via explicit qualification.
+- The public-but-unexported tier is now declared with the Julia **`public` keyword**
+  (`MultipoleModel`, the viz plumbing, `MeanFieldEngine`, `VASP`), machine-checkable via
+  `Base.ispublic` / Aqua.
+- Tests / docs build synthetic predictors with the core's new public
+  `SCEPredictor(basis, j0, jphi)` — the last SALC-internal touch (`basis.salc_basis.keys`)
+  is gone. Fixtures that passed a **short** `jphi` through the old unvalidated 4-argument
+  constructor (relying on the other SALCs being implicitly ignored) now pass explicit
+  zero-padded vectors.
+
+### Added — guards, shared constants, registration infra
+
+- Negative reduced temperatures are rejected loudly (`sample`, `mfa_sublattice_m`,
+  `thermal_averaged_m`) instead of silently aliasing the fully ordered limit.
+- `_multipole_state` clamps its Anderson iterate to the lmax-implied bound
+  `√((2·lmax+1)/4π)` (a fixed ±1.5 would clip a legitimate `⟨Z_l0⟩` for l ≥ 14) and clamps
+  the final `m` to `[−1, 1]`; the *absence* of an upper-τ shortcut in the tensorial /
+  multipole solvers is now documented as deliberate (single-ion order persists above the
+  exchange `T_MF`).
+- The tesseral constants are bound to the core's single definition
+  (`SCEFitting.Harmonics.N1/A2/B2`), so the forward mapping here and the core's inverse
+  cannot drift.
+- Test hardening: `fixed`/`uniform`/`randomize` pinned on the Metropolis path; the JSON
+  export is parsed by a real JSON parser (new test-only JSON dep); `write_incar`'s `extra`
+  kwarg (incl. `.TRUE.`/`.FALSE.`), zero-SAXIS, template-MAGMOM mismatch, `Oszicar`
+  `energy_kind`, `ExchangeModel` Hermiticity/onsite-length, `MultipoleModel`-sampler
+  dimension guards, an m-collection sweep, and a real rotation check for `randomize`.
+- `LICENSE` (MIT) and a CI workflow (tests + Aqua + JET on Ubuntu/macOS, with the
+  path-dev `SCEFitting` checked out as a sibling).
+
 ### Changed — review-driven refactor (Tier 0 fixes, Tier 1 hot path, Tier 2 structure)
 
 A four-axis review (numerical, generalist, performance, ideal-package) drove a tiered

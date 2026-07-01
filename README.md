@@ -13,6 +13,11 @@ Auxiliary tooling around the spin-cluster-expansion (SCE) fitting core
     (Heisenberg / DMI / anisotropic exchange + single-ion);
   - `MFASampler(model::SCEPredictor; reference)` — the full multipole sampler from a fitted
     model (all clusters and `l`, higher-order / many-body).
+- **Orientation-distribution export** *(available)* — `write_mfa_distributions` writes the
+  per-atom single-site orientation distributions (the exact `exp(−V_a)` coefficients over a
+  τ sweep) to a self-describing JSON file, rendered by the standalone Python sphere viewer
+  `viz/mfa_viewer.py` (per-atom probability-coloured spheres, mean-moment arrows updated
+  per τ frame, temperature slider — see `viz/README.md`).
 - **VASP I/O** *(available)* — `SCETools.VASP` is the concrete VASP adapter (the fitting core
   keeps only the abstract DFT-data seam): **read** training data (`read_poscar`, `Oszicar` →
   `SpinDatum`) and **write** constrained-noncollinear inputs from sampled configurations
@@ -45,12 +50,16 @@ using SCEFitting, SCETools
 model = …                                   # a fitted SCEPredictor (see SCEFitting)
 ref   = …                                   # 3 × n_atoms reference directions (unit columns)
 s     = MFASampler(model; reference = ref)  # keep every channel (bilinear … many-body)
-samp  = sample(s, 0.6)                       # configurations at τ = 0.6
+samp  = sample(s, 200; tau = 0.6)           # 200 configurations at τ = 0.6
 ```
 
 The sampler reads the fitted Hamiltonian only through `SCEFitting`'s public surface
 (`multipole_terms`, `bilinear_terms`, `SCEFitting.Harmonics`), so it is insulated from
 the core's SALC-basis internals.
+
+> **Known name collision:** `SCETools` exports `sample`, which collides with
+> `StatsBase.sample` under a simultaneous `using SCETools, StatsBase` — qualify one of
+> them (`SCETools.sample(...)`).
 
 ## Documentation
 
@@ -69,4 +78,9 @@ The build is local-only (no published remote yet); `SCEFitting` must sit at
 ```bash
 julia --project -e 'using Pkg; Pkg.test()'             # unit + Aqua
 TEST_MODE=all julia --project -e 'using Pkg; Pkg.test()'  # + JET
+julia --project=test/oracle test/oracle/runtests.jl    # VASP parsers vs pinned Magesty
 ```
+
+## License
+
+MIT (see `LICENSE`).

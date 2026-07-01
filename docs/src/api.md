@@ -4,10 +4,23 @@
 CurrentModule = SCETools
 ```
 
-Every exported type and function. The headline workflow is `MFASampler(model; reference)`
+```@docs
+SCETools
+```
+
+Every public type and function. The headline workflow is `MFASampler(model; reference)`
 → [`sample`](@ref) → [`MFASample`](@ref); see [Sampling](guide/sampling.md) and
 [Exchange models](guide/exchange_models.md) for the constructions and helpers (some
 docstrings are shown on those pages and indexed below).
+
+The surface is two-tiered: the **exported** workflow above, plus a **public,
+unexported** tier declared with the Julia `public` keyword and reached by qualification
+(`SCETools.<name>`): [`MultipoleModel`](@ref), the viz plumbing
+([`SphereGrid`](@ref), [`fibonacci_sphere`](@ref), [`harmonic_basis`](@ref),
+[`site_probabilities`](@ref)), and the submodules `SCETools.MeanFieldEngine` (the engine
+primitives `site_potential`, `sample_vmf`, `sample_vmf_field`, `sample_site_metropolis`,
+`SphereQuadrature`, `sphere_quadrature`, `field_scale`, `multipole_average`) and
+`SCETools.VASP`.
 
 ```@index
 ```
@@ -36,6 +49,24 @@ the interactive viewer) is documented under
 [`write_mfa_distributions`](@ref), [`mfa_site_coefficients`](@ref),
 [`SiteDistributionField`](@ref), [`fibonacci_sphere`](@ref), [`SphereGrid`](@ref),
 [`harmonic_basis`](@ref), and [`site_probabilities`](@ref). The docstrings are shown there.
+
+## MeanFieldEngine kernels
+
+The `MeanFieldEngine` submodule (public, unexported — call as
+`SCETools.MeanFieldEngine.site_potential` etc.) is the self-contained single-site
+engine: the potential `V(e) = Σ c·Z`, the closed-form vMF draw, the general Metropolis
+draw (rotation + antipodal-flip mixture proposal), and the deterministic sphere
+quadrature for the multipole averages. Pure on-sphere math with no SCE coupling.
+
+```@docs
+MeanFieldEngine.site_potential
+MeanFieldEngine.sample_vmf
+MeanFieldEngine.sample_vmf_field
+MeanFieldEngine.sample_site_metropolis
+MeanFieldEngine.SphereQuadrature
+MeanFieldEngine.sphere_quadrature
+MeanFieldEngine.multipole_average
+```
 
 ## VASP I/O
 

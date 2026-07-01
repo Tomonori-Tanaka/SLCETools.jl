@@ -24,7 +24,10 @@ It never touches the SALC-basis internals (`model.basis.salc_basis.salcs`, `SALC
 src/SCETools.jl              # module: imports + includes + the two export tiers
 src/mfa/
   engine.jl                  # module MeanFieldEngine: single-site potential, vMF / Metropolis
-                             #   draws, sphere quadrature — pure on-sphere math, no SCE coupling
+                             #   draws, sphere quadrature — pure on-sphere math, no SCE coupling;
+                             #   exports site_potential, sample_vmf, sample_vmf_field,
+                             #   sample_site_metropolis, SphereQuadrature, sphere_quadrature,
+                             #   field_scale, multipole_average (the `_`-prefixed helpers stay private)
   types.jl                   # the carrier / sampler structs + invariant-enforcing inner ctors:
                              #   AbstractSampler, ExchangeModel, MultipoleModel, MFASampler{S}, MFASample
   exchange.jl                # ExchangeModel construction + the longitudinal molecular-field analysis
@@ -50,18 +53,22 @@ POSCAR / OSZICAR parsers bit-for-bit against Magesty; run with
 ## Public API (sampling)
 
 The export surface is tiered (mirroring `SCEFitting`): a lean exported workflow plus a
-*public but unexported* tier reached by qualification (`SCETools.<name>`).
+*public but unexported* tier reached by qualification (`SCETools.<name>`), declared with
+the Julia `public` keyword so the tier is machine-checkable (`Base.ispublic`, Aqua).
 
 - **Exported** — `AbstractSampler`, `MFASampler`, `MFASample`, `ExchangeModel`, `sample`;
   the helpers `mfa_temperature_scale`, `mfa_sublattice_m`, `thermal_averaged_m`,
   `tau_from_magnetization`; and the viz output `SiteDistributionField`,
   `mfa_site_coefficients`, `write_mfa_distributions`.
-- **Public, unexported** — `MultipoleModel` (the full-multipole digest; usually built via
-  `MFASampler(model)`); the viz plumbing `SphereGrid` / `fibonacci_sphere` /
-  `harmonic_basis` / `site_probabilities`; and the engine kernels under
-  `SCETools.MeanFieldEngine`.
+- **Public, unexported** (`public`) — `MultipoleModel` (the full-multipole digest; usually
+  built via `MFASampler(model)`); the viz plumbing `SphereGrid` / `fibonacci_sphere` /
+  `harmonic_basis` / `site_probabilities`; and the submodules `MeanFieldEngine` (engine
+  primitives: `site_potential`, `sample_vmf`, `sample_vmf_field`, `sample_site_metropolis`,
+  `SphereQuadrature`, `sphere_quadrature`, `field_scale`, `multipole_average`) and `VASP`.
 
-`sample(sampler, τ; …)` → `MFASample` (configurations, per-atom magnetizations).
+`sample(sampler, n; tau, …)` → `MFASample` (configurations, per-atom magnetizations);
+`tau` (or `m`) is keyword-only, and a collection sweep drops the positional `n` in favor
+of `nsamples`.
 `MFASampler{S}` is parametric on its coupling source (`Nothing` / `ExchangeModel` /
 `MultipoleModel`) so the draw-path dispatch is type-stable.
 
@@ -95,7 +102,7 @@ An efficient SCE model-construction loop, closing the sample → label → refit
 
 1. **Propose** candidate configurations with the MFA sampler at a chosen `τ` (cheap,
    physically representative), optionally targeted by an acquisition criterion.
-2. **Label** them with DFT (write inputs via `SCEFitting.VASP`, run an external solver,
+2. **Label** them with DFT (write inputs via `SCETools.VASP`, run an external solver,
    read back energies / torques as `SpinDatum`).
 3. **Refit** the SCE model with `SCEFitting.fit` / `refit` on the augmented dataset.
 4. **Assess** uncertainty / acquisition and iterate until a target is met.

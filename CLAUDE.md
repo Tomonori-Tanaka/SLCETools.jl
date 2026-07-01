@@ -50,13 +50,17 @@ Inherited from the core (`SCEFitting`'s `CLAUDE.md`); the ones this package lean
   single-global Langevin curve, scale invariance, and the many-body factorization check
   `V_a/β = ⟨E | e_a⟩` to machine precision.
 - **`mfa/engine.jl` (`MeanFieldEngine`) ↔ `SCEFitting.Harmonics`** (`Zlm`, `lm_index`): the
-  quadrature / vMF / Metropolis kernels evaluate tesseral harmonics through the core submodule
-  (bound here by `import SCEFitting.Harmonics`, on the unit-direction `Zlm_unsafe` fast path). A
-  normalization change upstream shifts every multipole average.
+  engine primitives (`site_potential`, the vMF / Metropolis draws, the quadrature) evaluate
+  tesseral harmonics through the core submodule (bound here by `import SCEFitting.Harmonics`,
+  on the unit-direction `Zlm_unsafe` fast path — `Harmonics` is part of the core's declared
+  (`public`-keyword) stable surface, `Zlm_unsafe` included). A normalization change upstream
+  shifts every multipole average.
 - **`mfa/exchange.jl` `_l1_coeffs!` / `_l2_coeffs!`** (field → tesseral coefficients) are the
-  *forward* of the core's `_l1_pair_matrix` / `_l2_onsite_matrix` (tesseral → `3×3`). The
-  bilinear extraction uses the core's (inverse) matrices via `bilinear_terms`; do not
-  duplicate that delicate conversion here.
+  *forward* of the core's `_l1_pair_matrix` / `_l2_onsite_matrix` (tesseral → `3×3`, in the
+  core's `sce/bilinear.jl`). The tesseral constants `_N1`/`_A2`/`_B2` are **bound to**
+  `SCEFitting.Harmonics.N1/A2/B2` (single definition upstream), so the forward and inverse
+  conversions cannot drift apart. The bilinear extraction uses the core's (inverse) matrices
+  via `bilinear_terms`; do not duplicate that delicate conversion here.
 - **`io/vasp.jl` — read ↔ write inverse-consistency** (`SCETools.VASP`, one module holds both):
   (1) **SAXIS frame** — one `_saxis_rotation` (`R = Rz(α)Ry(β)`) serves both; the reader rotates
   SAXIS → Cartesian by `R`, the writer Cartesian → SAXIS by `Rᵀ`, so a write → read round-trip is
@@ -78,9 +82,12 @@ Inherited from the core (`SCEFitting`'s `CLAUDE.md`); the ones this package lean
 | `julia --project -e 'using Pkg; Pkg.test()'` | unit + Aqua (default) |
 | `TEST_MODE=all julia --project -e 'using Pkg; Pkg.test()'` | unit + Aqua + JET |
 | `TEST_MODE=jet julia --project -e 'using Pkg; Pkg.test()'` | JET type-stability |
+| `julia --project=test/oracle test/oracle/runtests.jl` | VASP parsers vs pinned Magesty |
 
 The suite (`test/runtests.jl`) dispatches on `TEST_MODE`
 (`default`/`all`/`unit`/`aqua`/`jet`). It needs `SCEFitting` available (path-dev).
+The oracle suite is a separate environment carrying the pinned `Magesty.jl` the
+core suite deliberately omits.
 
 ## References
 

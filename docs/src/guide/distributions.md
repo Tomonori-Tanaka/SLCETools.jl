@@ -89,7 +89,11 @@ python viz/mfa_viewer.py examples/mfa_distributions.json
 ## Building blocks
 
 [`write_mfa_distributions`](@ref) is the one call most users need; these are the pieces it
-composes, exported for inspection or a custom exporter.
+composes. [`mfa_site_coefficients`](@ref) and [`SiteDistributionField`](@ref) are exported;
+the render plumbing [`fibonacci_sphere`](@ref), [`SphereGrid`](@ref),
+[`harmonic_basis`](@ref), and [`site_probabilities`](@ref) is **public but unexported** —
+reach it by qualification (`SCETools.fibonacci_sphere`) or an explicit
+`using SCETools: fibonacci_sphere, SphereGrid, harmonic_basis, site_probabilities`.
 
 ```@docs
 mfa_site_coefficients

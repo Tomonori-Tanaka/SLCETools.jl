@@ -59,11 +59,12 @@ exch = ExchangeModel(model)        # ls=[1,1] bilinear + ls=[2] single-ion
 
 Only those two channels are representable as a bilinear model; any higher-order / higher-`l`
 SALCs are dropped and reported via `@warn`. To keep **every** channel, use the full multipole
-field:
+model (`MultipoleModel` is public but unexported — qualify it, or
+`using SCETools: MultipoleModel`):
 
 ```julia
-mf = MultipoleModel(model)         # all clusters and l, higher-order / many-body
-s  = MFASampler(model; reference)  # ≡ MFASampler(MultipoleModel(model); reference)
+mf = SCETools.MultipoleModel(model)  # all clusters and l, higher-order / many-body
+s  = MFASampler(model; reference)    # ≡ MFASampler(SCETools.MultipoleModel(model); reference)
 ```
 
 Both extractions read the fitted model through SCEFitting's public introspection surface
