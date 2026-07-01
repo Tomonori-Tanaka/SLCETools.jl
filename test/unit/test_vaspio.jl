@@ -152,7 +152,7 @@ end
     @testset "DFT-source seam → SCEDataset (code-agnostic)" begin
         c = read_poscar(_write(dir, "POSCAR_ds",
             "FeFe\n1.0\n 3 0 0\n 0 3 0\n 0 0 3\nFe\n2\nDirect\n 0 0 0\n 0.5 0 0\n"))
-        basis = SCEBasis(c, Interaction(; nbody = 2, pair_cutoff = 2.0, lmax = [2], isotropy = false))
+        basis = SCEBasis(c, BasisSpec(; nbody = 2, pair_cutoff = 2.0, lmax = [2], isotropy = false))
         src = Oszicar([_write(dir, "OSZICAR_d1", _oszicar_text()),
                        _write(dir, "OSZICAR_d2", _oszicar_text(energy_free = "-.80000000E+02"))])
         data = read_configs(src)
@@ -191,11 +191,14 @@ end
         @test read_poscar(pc).frac_positions ≈ c.frac_positions
 
         # unconstrained data (zero field) → zero torque → use_torque=true is rejected
-        basis = SCEBasis(c, Interaction(; nbody = 2, pair_cutoff = 2.0, lmax = [1], isotropy = true))
+        basis = SCEBasis(c, BasisSpec(; nbody = 2, pair_cutoff = 2.0, lmax = [1], isotropy = true))
         uc = read_configs(Oszicar(_write(dir, "OSZICAR_uc",
             _oszicar_text(field = [(0.0, 0, 0), (0.0, 0, 0)]))))
         @test all(t -> all(iszero, t), [d.torques for d in uc])
         @test_throws ArgumentError SCEDataset(basis, uc; use_torque = true)
         @test !has_torque(SCEDataset(basis, uc; use_torque = false))
+    end
+    @testset "Oszicar rejects an unknown energy_kind" begin
+        @test_throws ArgumentError Oszicar(["nonexistent"]; energy_kind = :bogus)
     end
 end

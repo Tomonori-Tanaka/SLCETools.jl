@@ -23,7 +23,7 @@ end
     fibonacci_sphere(npoints = 1000) -> SphereGrid
 
 Build the shared `S²` render grid as a golden-angle Fibonacci spiral (the same construction
-as `_field_scale` in the engine): `z = 1 − 2(k+½)/N`, `φ = ga·k`, `ga = π(3−√5)`. The
+as `field_scale` in the engine): `z = 1 − 2(k+½)/N`, `φ = ga·k`, `ga = π(3−√5)`. The
 points are equal solid angle, so the quadrature weight is the constant `4π/N`.
 """
 function fibonacci_sphere(npoints::Integer = 1000)::SphereGrid
@@ -44,8 +44,8 @@ end
     harmonic_basis(grid, lmax) -> Matrix{Float64}    # npoints × (lmax+1)²
 
 The shared tesseral-harmonic basis matrix `Z[i, k] = Z_lm(grid.dirs[i])`, with column `k`
-indexed by `Harmonics.lm_index(l, m)`. The `l = 0` column (a constant shift `_site_potential`
-ignores) is left zero, so `Z[i, :]·c == _site_potential(c, grid.dirs[i])` exactly for any
+indexed by `Harmonics.lm_index(l, m)`. The `l = 0` column (a constant shift `site_potential`
+ignores) is left zero, so `Z[i, :]·c == site_potential(c, grid.dirs[i])` exactly for any
 coefficient vector `c` of length `(lmax+1)²`. The viewer recovers `V_a = Z·c_a` with one
 matrix product, never touching the harmonics.
 """

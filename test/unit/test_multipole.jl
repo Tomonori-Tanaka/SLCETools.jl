@@ -21,16 +21,17 @@ const MR = SCETools
 function _biquadratic_model(seed)
     lat = Lattice(Matrix(3.0 * I(3)))
     cr = Crystal(lat, [0.2 -0.2; 0.0 0.0; 0.0 0.0], [1, 1], ["Fe"])
-    b = SCEBasis(cr, Interaction(; nbody = 2, pair_cutoff = 1.5, lmax = [2], isotropy = false))
-    return SCEPredictor(b, 0.0, 0.05 .* randn(MersenneTwister(seed), n_salcs(b)), b.salc_basis.keys)
+    b = SCEBasis(cr, BasisSpec(; nbody = 2, pair_cutoff = 1.5, lmax = [2], isotropy = false))
+    return SCEPredictor(b, 0.0, 0.05 .* randn(MersenneTwister(seed), n_salcs(b)))
 end
 
 # A clean ferromagnetic Heisenberg dimer (couples atoms 1–2; pure l=1).
 function _dimer_model()
     lat = Lattice([8.0 0 0; 0 8.0 0; 0 0 10.0])
     cr = Crystal(lat, [0 0 0 0; 0 0 0 0; 0.0 0.25 0.5 0.75], [1, 1, 1, 1], ["Fe"])
-    b = SCEBasis(cr, Interaction(; nbody = 2, pair_cutoff = 2.6, lmax = [1], isotropy = true))
-    return SCEPredictor(b, 0.0, [-0.02], b.salc_basis.keys)   # negative ⇒ ferro along +z
+    b = SCEBasis(cr, BasisSpec(; nbody = 2, pair_cutoff = 2.6, lmax = [1], isotropy = true))
+    # only the first SALC (the 1-2 bond orbit) is nonzero: a clean coupled dimer
+    return SCEPredictor(b, 0.0, vcat([-0.02], zeros(n_salcs(b) - 1)))   # negative ⇒ ferro
 end
 
 @testset "full multipole sampler (P4)" begin
@@ -42,8 +43,6 @@ end
         mf2 = MultipoleModel(_biquadratic_model(0))
         @test mf2.lmax == 2                             # the [2,2] biquadratic channel
         @test length(mf2.terms) > length(mf1.terms)
-        # the deprecated MultipoleField binding still resolves to MultipoleModel
-        @test SCETools.MultipoleField === MultipoleModel
     end
 
     @testset "MultipoleModel inner constructor enforces invariants" begin
@@ -73,9 +72,9 @@ end
 
     @testset "scale invariance: scaling all couplings leaves m_a(τ) unchanged" begin
         b = _dimer_model().basis
-        s1 = MFASampler(SCEPredictor(b, 0.0, [-0.02], b.salc_basis.keys);
+        s1 = MFASampler(SCEPredictor(b, 0.0, vcat([-0.02], zeros(n_salcs(b) - 1)));
                         reference = Float64[0 0 0 0; 0 0 0 0; 1 1 1 1])
-        s9 = MFASampler(SCEPredictor(b, 0.0, [-0.18], b.salc_basis.keys);
+        s9 = MFASampler(SCEPredictor(b, 0.0, vcat([-0.18], zeros(n_salcs(b) - 1)));
                         reference = Float64[0 0 0 0; 0 0 0 0; 1 1 1 1])
         for τ in (0.3, 0.6, 0.9)
             @test mfa_sublattice_m(s1, τ) ≈ mfa_sublattice_m(s9, τ) atol = 1e-9
@@ -104,7 +103,7 @@ end
         base = cond_E(e0)
         for e in (SVector{3,Float64}(1, 0, 0), SVector{3,Float64}(0, 1, 0),
                   normalize(SVector{3,Float64}(1, 1, 1)), normalize(SVector{3,Float64}(1, -2, 1)))
-            dV = (MR._site_potential(cs[1], e) - MR._site_potential(cs[1], e0)) / β
+            dV = (MR.site_potential(cs[1], e) - MR.site_potential(cs[1], e0)) / β
             dE = cond_E(e) - base
             @test dV ≈ dE atol = 3e-2
         end
@@ -120,13 +119,20 @@ end
         cs, _ = MR._multipole_state(mf, ehat, ρ, τ)
         avg = MR.multipole_average(cs[1], mf.lmax)
         rng = MersenneTwister(4)
-        step = clamp(1.5 / sqrt(1 + MR._field_scale(cs[1])), 0.05, 0.8)
+        step = clamp(1.5 / sqrt(1 + MR.field_scale(cs[1])), 0.05, 0.8)
         chain = MR.sample_site_metropolis(rng, cs[1], 8000; e_init = ehat[1], step = step,
                                           nburn = 600, thin = 12)
         for (l, m) in ((1, 0), (2, 0), (2, 2))
             mc = mean(MR.Harmonics.Zlm(l, m, e) for e in chain)
             @test mc ≈ avg[MR.Harmonics.lm_index(l, m)] atol = 3e-2
         end
+    end
+
+    @testset "MultipoleModel-backed sampler guards" begin
+        model = _dimer_model()                       # 4 atoms
+        @test_throws DimensionMismatch MFASampler(model; reference = Float64[0 0; 0 0; 1 1])
+        mf = MultipoleModel(model)
+        @test_throws DimensionMismatch MFASampler(mf; reference = Float64[0 0; 0 0; 1 1])
     end
 
     @testset "P4 draws are reproducible under a fixed seed" begin

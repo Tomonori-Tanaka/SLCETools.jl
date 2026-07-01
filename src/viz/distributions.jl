@@ -11,7 +11,7 @@
     SiteDistributionField
 
 Per-atom single-site distribution coefficients at one reduced temperature `tau`. Each
-`coeffs[a]` is a `_site_potential`-ready tesseral vector of length `(lmax+1)²`; the
+`coeffs[a]` is a `site_potential`-ready tesseral vector of length `(lmax+1)²`; the
 distribution on atom `a` is `P(e) ∝ exp(−Σ_k coeffs[a][k]·Z_k(e))`. `m[a]` is the
 self-consistent magnetization `m_a = ⟨e·ê_a⟩` (equal to `mfa_sublattice_m(sampler, tau)[a]`
 by construction). `reference[:, a]` is the rigid axis `ê_a`.
@@ -63,7 +63,7 @@ end
     site_probabilities(field, grid) -> Matrix{Float64}    # n × npoints
 
 The normalized single-site density on the shared grid: row `a` is `p_a(e_i)` with
-`Σ_i p_a(e_i)·grid.weight == 1`. Evaluated through `_site_potential` (the same harmonic
+`Σ_i p_a(e_i)·grid.weight == 1`. Evaluated through `site_potential` (the same harmonic
 kernel the exported basis matrix reproduces), so it doubles as the verification that the
 viewer's `exp(−Z·c_a)` path is correct. The per-row `max(−V)` shift keeps the sharply
 peaked (low-τ / ordered) limit finite.
@@ -76,7 +76,7 @@ function site_probabilities(field::SiteDistributionField, grid::SphereGrid)::Mat
         c = field.coeffs[a]
         vmin = Inf
         for i = 1:npts
-            v = _site_potential(c, grid.dirs[i])
+            v = site_potential(c, grid.dirs[i])
             P[a, i] = v
             vmin = min(vmin, v)
         end

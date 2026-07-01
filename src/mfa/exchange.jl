@@ -29,11 +29,13 @@
 # couplings scales A and ρ together, so `Ā` and every `m_a(τ)` is scale-free (D4): only the
 # coupling *ratios* matter (the single-ion strength relative to the exchange is physical).
 
-# Tesseral normalization constants (shared with the Sunny export `_l1_pair_matrix` /
-# `_l2_onsite_matrix`): Z_{1,m} = √(3/4π)·(component); the l=2 constants below.
-const _N1 = sqrt(3 / (4π))
-const _A2 = sqrt(15 / (16π))
-const _B2 = sqrt(5 / (16π))
+# Tesseral normalization constants, bound to the core's single definition
+# (`SCEFitting.Harmonics.N1/A2/B2`, also used by its bilinear extraction
+# `_l1_pair_matrix` / `_l2_onsite_matrix`) so this forward mapping and the core's
+# inverse cannot drift apart: Z_{1,m} = N1·(component); the l=2 constants below.
+const _N1 = Harmonics.N1
+const _A2 = Harmonics.A2
+const _B2 = Harmonics.B2
 
 # Normalize an `onsite` keyword (nothing ⇒ zeros) to a length-n vector of SMatrices.
 function _onsite_vec(onsite, n::Int)::Vector{SMatrix{3,3,Float64,9}}

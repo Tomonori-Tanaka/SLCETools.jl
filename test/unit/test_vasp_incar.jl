@@ -21,10 +21,6 @@ function incar_floats(path, key)
     return nothing
 end
 
-incar_has(path, key) = incar_floats(path, key) !== nothing ||
-    any(startswith(strip(replace(l, r"[#!].*$" => "")), uppercase(key) * " ") ||
-        occursin(Regex("^\\s*" * key * "\\s*="), strip(l)) for l in eachline(path))
-
 _unit(v) = v / norm(v)
 
 @testset "VASP input writing" begin
@@ -183,6 +179,16 @@ _unit(v) = v / norm(v)
         @test basename(dirs[1]) == "s-001"
     end
 
+    @testset "extra tags: appended verbatim, Bool as .TRUE./.FALSE." begin
+        p = tempname()
+        V.write_incar(p, cfg; magmoms = 2.0, constrain = false,
+                      extra = ["LSORBIT" => true, "ENCUT" => 500, "ALGO" => "Fast"])
+        txt = read(p, String)
+        @test occursin("LSORBIT = .TRUE.", txt)
+        @test occursin("ENCUT = 500", txt)
+        @test occursin("ALGO = Fast", txt)
+    end
+
     @testset "errors" begin
         p = tempname()
         @test_throws ArgumentError V.write_incar(p, cfg)            # no magmoms, no template
@@ -194,5 +200,9 @@ _unit(v) = v / norm(v)
                                                   magmoms = Dict("A" => 3.0))    # missing "B"
         @test_throws ArgumentError V.write_inputs(mktempdir(), cr, cfg[:, 1:2];
                                                   magmoms = 1.0)                 # wrong atom count
+        @test_throws ArgumentError V._saxis_rotation((0.0, 0.0, 0.0))            # zero SAXIS
+        # template MAGMOM with the wrong atom count cannot supply the magnitudes
+        @test_throws ArgumentError V.write_incar(p, cfg;
+                                                 base = "MAGMOM = 0 0 2  0 0 2\n")
     end
 end

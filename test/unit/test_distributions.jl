@@ -1,12 +1,13 @@
 # Per-atom MFA probability distribution export (src/viz/distributions.jl). Validates the
 # shared Fibonacci grid, the discrete normalization of `site_probabilities`, that the
-# exported basis matrix `Z·c` reproduces `_site_potential` exactly (the viewer's render
+# exported basis matrix `Z·c` reproduces `site_potential` exactly (the viewer's render
 # path), the isotropic vMF closed form, the `m_a` consistency with `mfa_sublattice_m`, the
 # tensorial (Bingham) path, and the JSON document shape / round-trip.
 
 using Test
 using SCEFitting
 using SCETools
+import JSON
 using SCETools: fibonacci_sphere, harmonic_basis, site_probabilities   # public, unexported
 using SCETools.VASP: read_poscar
 using LinearAlgebra
@@ -31,14 +32,14 @@ end
         @test_throws ArgumentError fibonacci_sphere(0)
     end
 
-    @testset "harmonic_basis: Z·c == _site_potential, l=0 column is zero" begin
+    @testset "harmonic_basis: Z·c == site_potential, l=0 column is zero" begin
         grid = fibonacci_sphere(500)
         Z = harmonic_basis(grid, 2)
         @test size(Z) == (500, 9)
         @test all(Z[:, MV.Harmonics.lm_index(0, 0)] .== 0)   # l=0 column zeroed
         c = collect(1.0:9.0)                                  # arbitrary coefficient vector
         V = Z * c                                             # BLAS accumulation order differs
-        @test maximum(abs(V[i] - MV._site_potential(c, grid.dirs[i])) for i = 1:500) < 1e-13
+        @test maximum(abs(V[i] - MV.site_potential(c, grid.dirs[i])) for i = 1:500) < 1e-13
     end
 
     @testset "site_probabilities: discrete normalization Σ p·weight = 1" begin
@@ -135,14 +136,22 @@ end
         @test out == path
         @test isfile(path)
         txt = read(path, String)
-        @test occursin("scetools/mfa-distributions", txt)
-        @test startswith(txt, "{") && endswith(strip(txt), "}")
-        # the basis-matrix recovery V = Z·c must reproduce _site_potential for the viewer
+        # a real JSON parser must accept the hand-rolled emitter's output, and the parsed
+        # document must carry the schema fields (occursin/startswith alone cannot catch a
+        # malformed emitter)
+        doc = JSON.parse(txt)
+        @test doc["schema"] == "scetools/mfa-distributions"
+        @test doc["version"] == 1
+        @test length(doc["frames"]) == 2
+        @test doc["temperatures"] == [0.4, 0.8]
+        @test length(doc["frames"][1]["coeffs"]) == 2
+        @test all(isfinite, reduce(vcat, doc["frames"][1]["coeffs"]))
+        # the basis-matrix recovery V = Z·c must reproduce site_potential for the viewer
         field = mfa_site_coefficients(s, 0.4)
         grid = fibonacci_sphere(200)
         Z = harmonic_basis(grid, field.lmax)
         V = Z * field.coeffs[1]
-        @test maximum(abs(V[i] - MV._site_potential(field.coeffs[1], grid.dirs[i]))
+        @test maximum(abs(V[i] - MV.site_potential(field.coeffs[1], grid.dirs[i]))
                       for i = 1:200) < 1e-13
     end
 
@@ -153,5 +162,15 @@ end
         buf = IOBuffer()
         MV._emit_json(buf, "x\x01y")                  # a bare control char → 
         @test String(take!(buf)) == "\"x\\u0001y\""
+    end
+    @testset "_emit_json / document guards reject bad input loudly" begin
+        @test_throws ArgumentError MV._emit_json(IOBuffer(), NaN)      # non-finite number
+        @test_throws ArgumentError MV._emit_json(IOBuffer(), Inf)
+        @test_throws ArgumentError MV._emit_json(IOBuffer(), :sym)     # unsupported type
+        # crystal / sampler atom-count mismatch is refused at the document builder
+        crystal = _fe2_crystal()                                        # 2 atoms
+        s1 = MFASampler(Float64[0; 0; 1;;])                             # 1 atom
+        @test_throws ArgumentError MV._distribution_doc(s1, crystal; taus = [0.5],
+                                                        npoints = 100)
     end
 end

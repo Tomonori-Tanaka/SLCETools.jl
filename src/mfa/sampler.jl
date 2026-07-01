@@ -127,6 +127,7 @@ The self-consistent per-atom magnetizations `m_a(τ)` at reduced temperature `τ
 `thermal_averaged_m(τ)`.
 """
 function mfa_sublattice_m(s::MFASampler, τ::Real)::Vector{Float64}
+    τ >= 0 || throw(ArgumentError("the reduced temperature τ must be ≥ 0; got $τ"))
     if _needs_metropolis(s)
         _, m = _coeffs_and_m(s, Float64(τ))
         return m
@@ -202,11 +203,17 @@ end
 function _resolve_taus(tau, m)::Vector{Float64}
     (tau === nothing) == (m === nothing) &&
         throw(ArgumentError("provide exactly one of `tau` or `m`"))
-    if tau !== nothing
-        return tau isa Real ? [Float64(tau)] : Float64[Float64(t) for t in tau]
+    taus = if tau !== nothing
+        tau isa Real ? [Float64(tau)] : Float64[Float64(t) for t in tau]
+    else
+        m isa Real ? [tau_from_magnetization(m)] :
+            Float64[tau_from_magnetization(mi) for mi in m]
     end
-    return m isa Real ? [tau_from_magnetization(m)] :
-           Float64[tau_from_magnetization(mi) for mi in m]
+    # Reject negative τ loudly — it would otherwise fall into the τ < _MFA_MIN_TAU branch
+    # and silently alias the fully ordered limit.
+    all(>=(0.0), taus) ||
+        throw(ArgumentError("the reduced temperature τ must be ≥ 0; got $(minimum(taus))"))
+    return taus
 end
 
 """
@@ -314,7 +321,7 @@ function _sweep_metropolis(sampler::MFASampler, taus::Vector{Float64}, per::Inte
             end
             # scale the proposal to the peak sharpness (∝ 1/√concentration): a sharp Bingham
             # at low τ needs small steps to mix, a broad one near T_MF needs large steps.
-            step = clamp(1.5 / sqrt(1 + _field_scale(cs[a])), 0.05, 0.8)
+            step = clamp(1.5 / sqrt(1 + field_scale(cs[a])), 0.05, 0.8)
             chains[a] = sample_site_metropolis(rng, cs[a], per; e_init = ehat[a],
                                                step = step, nburn = 300, thin = 15)
         end

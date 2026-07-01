@@ -119,4 +119,23 @@ end
         vb = MR.sample_vmf_field(MersenneTwister(5), c)
         @test va == vb
     end
+
+    @testset "flip proposal keeps a strongly bimodal (double-well) chain ergodic" begin
+        # A deep easy-axis quadrupolar well: V = −12·Z_20 puts an equator barrier of ≈ 11 kT
+        # between the ±ẑ lobes, which the rotation proposal alone essentially never crosses
+        # at step ≲ 0.3 rad — a rotation-only chain started at +ẑ samples one lobe and
+        # reports ⟨e_z⟩ ≈ +1 although the true distribution is e ↔ −e symmetric (⟨e_z⟩ = 0),
+        # while every even ⟨Z_2m⟩ cross-check still passes. The antipodal-flip proposal
+        # (always accepted here, ΔV = 0) restores the inter-lobe exchange.
+        lmax = 2
+        c = zeros((lmax + 1)^2)
+        c[MR.Harmonics.lm_index(2, 0)] = -12.0
+        rng = MersenneTwister(21)
+        sm = MR.sample_site_metropolis(rng, c, 30_000; step = 0.3, nburn = 500, thin = 4,
+                                       e_init = SVector{3,Float64}(0, 0, 1))
+        ez = sum(e -> e[3], sm) / length(sm)
+        @test abs(ez) < 5e-2                                   # both lobes visited
+        z20 = sum(e -> MR.Harmonics.Zlm(2, 0, e), sm) / length(sm)
+        @test z20 ≈ MR.multipole_average(c, lmax)[MR.Harmonics.lm_index(2, 0)] atol = 2e-2
+    end
 end

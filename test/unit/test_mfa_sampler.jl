@@ -139,4 +139,34 @@ _zref(n) = repeat(Float64[0, 0, 1], 1, n)
         # the inner constructor rejects non-parallel configs/tau/m
         @test_throws DimensionMismatch SCETools.MFASample([zeros(3, 1)], [0.5, 0.6], [[1.0]])
     end
+
+    @testset "sweep by a magnetization collection mirrors the τ collection" begin
+        s = MFASampler(_zref(10))
+        ms = [0.3, 0.7]
+        sw = sample(s; m = ms, nsamples = 2, rng = MersenneTwister(13))
+        @test length(sw) == 4
+        @test sw.tau[1:2] == fill(MR.tau_from_magnetization(0.3), 2)
+        @test sw.tau[3:4] == fill(MR.tau_from_magnetization(0.7), 2)
+        @test all(v -> all(≈(0.3; atol = 1e-6), v), sw.m[1:2])
+    end
+
+    @testset "randomize really rotates the realized frame" begin
+        # At τ = 0.2 the un-rotated draw is a tight cone about +ẑ (mean z ≈ 0.98); one
+        # uniform global rotation per configuration moves that cone off +ẑ for a generic
+        # seed, while every column stays unit.
+        s = MFASampler(_zref(50))
+        r = sample(s, 3; tau = 0.2, rng = MersenneTwister(5), randomize = true)
+        zbars = [mean(@view c[3, :]) for c in r.configs]
+        @test any(z -> abs(z) < 0.9, zbars)              # some frame is off +ẑ
+        @test !all(≈(zbars[1]; atol = 1e-6), zbars)      # one independent rotation per config
+        @test all(c -> all(a -> abs(norm(@view c[:, a]) - 1) < 1e-10, 1:50), r.configs)
+    end
+
+    @testset "negative reduced temperatures are rejected loudly" begin
+        s = MFASampler(_zref(3))
+        @test_throws ArgumentError sample(s, 1; tau = -0.2)
+        @test_throws ArgumentError sample(s; tau = [0.5, -0.1], nsamples = 1)
+        @test_throws ArgumentError mfa_sublattice_m(s, -0.5)
+        @test_throws ArgumentError MR.thermal_averaged_m(-1.0)
+    end
 end

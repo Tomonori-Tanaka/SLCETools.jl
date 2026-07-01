@@ -33,11 +33,12 @@ using SCEFitting: SCEPredictor, n_atoms, multipole_terms, MultipoleTerm, bilinea
 
 # --- mean-field spin-configuration sampling (docs/specs/mfa-sampling.md) ---
 # P0: the single-site engine submodule (potential, vMF / Metropolis draws, sphere quadrature),
-# pure on-sphere math; the parent re-binds the names the rest of the package uses.
+# pure on-sphere math; the parent re-binds the names the rest of the package uses (the
+# `_`-prefixed ones are engine internals, imported here by explicit qualification).
 include("mfa/engine.jl")
-using .MeanFieldEngine: _random_unit, _field_lmax, _site_potential, _l1_field, sample_vmf,
+using .MeanFieldEngine: _random_unit, _field_lmax, _l1_field, site_potential, sample_vmf,
     sample_vmf_field, sample_site_metropolis, SphereQuadrature, sphere_quadrature,
-    _field_scale, multipole_average
+    field_scale, multipole_average
 # types (carriers + sampler) → ExchangeModel construction → the τ self-consistency solvers →
 # the MFASampler constructors + the `sample` verb → extraction from a fitted SCE.
 include("mfa/types.jl")
@@ -46,9 +47,9 @@ include("mfa/selfconsistency.jl")
 include("mfa/sampler.jl")
 include("mfa/bridge.jl")
 
-# VASP input writing: sampled spin configurations → constrained-noncollinear INCAR / input
-# sets. Namespaced as `SCETools.VASP` (mirrors the reader-side `SCEFitting.VASP`), so it
-# does not grow the top-level export list.
+# The VASP adapter (`SCETools.VASP`): OSZICAR/POSCAR reading into `SpinDatum`s and
+# constrained-noncollinear INCAR / input-set writing. Namespaced as a submodule, so it
+# does not grow the top-level export list (a second DFT code would be a sibling).
 include("io/vasp.jl")
 
 # Per-atom MFA probability distributions → coefficient export for the Python sphere viewer:
@@ -69,18 +70,14 @@ export mfa_temperature_scale, mfa_sublattice_m, thermal_averaged_m, tau_from_mag
 # per-atom MFA distribution export (the viz output a user calls)
 export SiteDistributionField, mfa_site_coefficients, write_mfa_distributions
 
-# Deprecated alias: `MultipoleModel` was named `MultipoleField` before v0.2 (it is a coupling
-# model, the full-fidelity sibling of `ExchangeModel`, not a field). Kept one minor version.
-Base.@deprecate_binding MultipoleField MultipoleModel
-
 # --- Public, unexported -----------------------------------------------------------
-# Reachable as `SCETools.<name>` (and documented), but kept out of the flat `using` namespace.
-# The headline workflow (`MFASampler` / `sample` / `ExchangeModel` / `write_mfa_distributions`)
-# already drives them. Power users and the test suite reach them by qualification.
-#
-#   coupling digest : MultipoleModel        (built via `MFASampler(model)`; rarely hand-made)
-#   viz plumbing    : SphereGrid, fibonacci_sphere, harmonic_basis, site_probabilities
-#   engine kernels  : SCETools.MeanFieldEngine.{sphere_quadrature, multipole_average,
-#                     sample_vmf, sample_vmf_field, sample_site_metropolis, SphereQuadrature}
+# Reachable as `SCETools.<name>` (and documented), but kept out of the flat `using`
+# namespace. The headline workflow (`MFASampler` / `sample` / `ExchangeModel` /
+# `write_mfa_distributions`) already drives them; power users and the test suite reach
+# them by qualification. Declared with the `public` keyword so the tier is
+# machine-checkable (`Base.ispublic`, Aqua) instead of a comment-only promise.
+public MultipoleModel                       # coupling digest (built via `MFASampler(model)`)
+public SphereGrid, fibonacci_sphere, harmonic_basis, site_probabilities  # viz plumbing
+public MeanFieldEngine, VASP                # engine kernels / the VASP adapter submodule
 
 end # module SCETools

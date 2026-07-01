@@ -13,6 +13,11 @@ const _I3 = SMatrix{3,3,Float64}(I)
 
 Dispatch seam for spin-configuration samplers. [`MFASampler`](@ref) (mean-field) is the
 first; future Metropolis-MC / spin-spiral samplers can slot in behind the `sample` verb.
+
+The interface a subtype implements:
+`sample(s, n; tau, rng, ...) -> MFASample` (configurations in the `3 × n_atoms`
+unit-column layout, with parallel `tau` / `m` labels) and, where a temperature scale
+is meaningful, `mfa_temperature_scale(s)`.
 """
 abstract type AbstractSampler end
 
@@ -105,8 +110,8 @@ The digested full-multipole mean field of a fitted SCE (P4): every cluster term
 `l=1` temperature scale `ρ`). Built by `MultipoleModel(model::SCEPredictor)`; consumed by the
 [`MFASampler`](@ref) tensorial/Metropolis path.
 
-Renamed from `MultipoleField` in v0.2 (it is a coupling *model*, the full-fidelity sibling
-of [`ExchangeModel`](@ref), not a field); the old name remains as a deprecated binding.
+Renamed from `MultipoleField` (it is a coupling *model*, the full-fidelity sibling of
+[`ExchangeModel`](@ref), not a field).
 """
 struct MultipoleModel
     natoms::Int

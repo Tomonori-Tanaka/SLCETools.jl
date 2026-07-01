@@ -9,7 +9,7 @@
 # is ignored). Mean-field decoupling of any SCE term — any body order, any `l` — folds
 # into such a `V`, so one engine covers every case (spec §1.1).
 #
-# Provides: the potential `_site_potential`; a closed-form von Mises–Fisher draw
+# Provides: the potential `site_potential`; a closed-form von Mises–Fisher draw
 # `sample_vmf` (the `l = 1`-only fast path, via `_l1_field`); a general single-site
 # Metropolis draw `sample_site_metropolis`; and a deterministic spherical quadrature
 # (`sphere_quadrature` / `multipole_average`) for the multipole averages `⟨Z_lm⟩` the
@@ -26,8 +26,11 @@ using LinearAlgebra: norm, dot, cross
 using Random: AbstractRNG
 import SCEFitting.Harmonics
 
-export _random_unit, _field_lmax, _site_potential, _l1_field, sample_vmf, sample_vmf_field,
-    sample_site_metropolis, SphereQuadrature, sphere_quadrature, _field_scale, multipole_average
+# Only the genuinely public primitives are exported; the `_`-prefixed internals
+# (`_random_unit`, `_field_lmax`, `_l1_field`, `_rotate`, …) stay private — the parent
+# imports the few it needs by explicit qualification.
+export site_potential, sample_vmf, sample_vmf_field, sample_site_metropolis,
+    SphereQuadrature, sphere_quadrature, field_scale, multipole_average
 
 # --- small geometry helpers ------------------------------------------------------
 
@@ -63,12 +66,12 @@ end
 # --- the single-site potential ---------------------------------------------------
 
 """
-    _site_potential(c, e) -> Float64
+    site_potential(c, e) -> Float64
 
 The single-site potential `V(e) = Σ_{l≥1, m} c[lm_index(l, m)]·Z_lm(e)`. `c` has length
 `(lmax+1)²`; the `l = 0` entry is ignored (a constant shift cancels in `exp(−V)`).
 """
-function _site_potential(c::AbstractVector{<:Real}, e::AbstractVector{<:Real})::Float64
+function site_potential(c::AbstractVector{<:Real}, e::AbstractVector{<:Real})::Float64
     lmax = isqrt(length(c)) - 1
     v = 0.0
     # `e` is a unit direction on every call site (quadrature / Fibonacci nodes, Metropolis
@@ -143,13 +146,29 @@ end
 
 # --- general single-site Metropolis draw -----------------------------------------
 
-# One Metropolis step on the sphere with a symmetric random-rotation proposal: rotate
-# `e` about a uniformly random axis by `θ ∼ step·N(0,1)`, accept with `min(1, e^{−ΔV})`.
+# Fraction of proposals that are the antipodal flip `e → −e`. A rotation-only proposal
+# cannot cross the equator barrier of a strongly bimodal potential (an e ↔ −e symmetric
+# single-ion double-well: exactly the m → 0 regime near/above T_MF, or a single-ion-only
+# atom) once `step` ≲ the barrier width — the chain stays in the starting lobe and every
+# odd multipole of the draw is silently biased while the even (Z_2m) cross-checks still
+# pass. The flip restores inter-lobe ergodicity; on an asymmetric (l=1-dominated) well it
+# is simply rejected with the correct Boltzmann weight `e^{−ΔV}`. Both proposal
+# components are symmetric (an involution / a symmetric-angle rotation about a uniform
+# axis), so the mixture keeps detailed balance.
+const _METROPOLIS_FLIP_FRACTION = 0.2
+
+# One Metropolis step on the sphere: with probability `_METROPOLIS_FLIP_FRACTION` propose
+# the antipode `−e`, otherwise rotate `e` about a uniformly random axis by
+# `θ ∼ step·N(0,1)` (Rodrigues); accept with `min(1, e^{−ΔV})`.
 @inline function _metropolis_step(rng::AbstractRNG, c::AbstractVector{<:Real},
                                   e::SVector{3,Float64}, V::Float64, step::Float64)
-    axis = _random_unit(rng)
-    e2 = _rotate(e, axis, step * randn(rng))
-    V2 = _site_potential(c, e2)
+    e2 = if rand(rng) < _METROPOLIS_FLIP_FRACTION
+        -e
+    else
+        axis = _random_unit(rng)
+        _rotate(e, axis, step * randn(rng))
+    end
+    V2 = site_potential(c, e2)
     if V2 <= V || rand(rng) < exp(V - V2)
         return e2, V2
     end
@@ -160,10 +179,13 @@ end
     sample_site_metropolis(rng, c, n; step = 0.6, nburn = 200, thin = 10, e_init) -> Vector{SVector{3,Float64}}
 
 Draw `n` (approximately decorrelated) unit directions from `P(e) ∝ exp(−V(e))`,
-`V = Σ c·Z`, by single-site Metropolis with a symmetric random-rotation proposal
-(`step` = proposal angle scale, radians). A `nburn`-step burn-in precedes the draws and
-`thin` steps separate them. Handles any `V` (any `l`, hence DMI / anisotropy / many-body
-fields) — the general engine; `sample_vmf_field` is the closed-form `l = 1` fast path.
+`V = Σ c·Z`, by single-site Metropolis with a symmetric two-component proposal: a
+random rotation (`step` = proposal angle scale, radians) mixed with an antipodal flip
+`e → −e` (fraction `$(_METROPOLIS_FLIP_FRACTION)`), which keeps the chain ergodic
+across both lobes of a bimodal (single-ion double-well) potential. A `nburn`-step
+burn-in precedes the draws and `thin` steps separate them. Handles any `V` (any `l`,
+hence DMI / anisotropy / many-body fields) — the general engine; `sample_vmf_field` is
+the closed-form `l = 1` fast path.
 """
 function sample_site_metropolis(rng::AbstractRNG, c::AbstractVector{<:Real}, n::Integer;
                                 step::Real = 0.6, nburn::Integer = 200, thin::Integer = 10,
@@ -174,7 +196,7 @@ function sample_site_metropolis(rng::AbstractRNG, c::AbstractVector{<:Real}, n::
     stepf = Float64(step)
     e = SVector{3,Float64}(e_init)
     e = e / norm(e)
-    V = _site_potential(c, e)
+    V = site_potential(c, e)
     for _ = 1:nburn
         e, V = _metropolis_step(rng, c, e, V, stepf)
     end
@@ -234,7 +256,7 @@ end
 # "concentration" that sets how finely the quadrature must resolve a sharply peaked
 # (low-temperature, large-field) distribution — sizing by harmonic order alone would
 # under-resolve it and bias `⟨Z_lm⟩`.
-function _field_scale(c::AbstractVector{<:Real})::Float64
+function field_scale(c::AbstractVector{<:Real})::Float64
     n = 128
     ga = π * (3 - sqrt(5.0))                          # golden angle
     vmin, vmax = Inf, -Inf
@@ -242,7 +264,7 @@ function _field_scale(c::AbstractVector{<:Real})::Float64
         z = 1 - 2 * (k + 0.5) / n
         r = sqrt(max(0.0, 1 - z * z))
         φ = ga * k
-        v = _site_potential(c, SVector{3,Float64}(r * cos(φ), r * sin(φ), z))   # unit by construction
+        v = site_potential(c, SVector{3,Float64}(r * cos(φ), r * sin(φ), z))   # unit by construction
         vmin = min(vmin, v)
         vmax = max(vmax, v)
     end
@@ -294,13 +316,13 @@ The multipole averages `⟨Z_lm⟩ = ∫ Z_lm·e^{−V} dΩ / ∫ e^{−V} dΩ` 
 `l = 0` slot holds `⟨Z_00⟩` (the normalization check).
 
 The two-argument form builds a quadrature sized for both `lmax` and the field strength of
-`c` (`concentration = _field_scale(c)`) — correct even for a sharply peaked, low-temperature
+`c` (`concentration = field_scale(c)`) — correct even for a sharply peaked, low-temperature
 field. The three-argument form evaluates on a caller-supplied `q` (reuse a precomputed grid,
 but size it adequately for the field).
 """
 function multipole_average(c::AbstractVector{<:Real}, lmax::Integer)::Vector{Float64}
     _field_lmax(c)
-    return multipole_average(sphere_quadrature(lmax; concentration = _field_scale(c)), c, lmax)
+    return multipole_average(sphere_quadrature(lmax; concentration = field_scale(c)), c, lmax)
 end
 
 function multipole_average(q::SphereQuadrature, c::AbstractVector{<:Real},
@@ -313,7 +335,7 @@ function multipole_average(q::SphereQuadrature, c::AbstractVector{<:Real},
     @inbounds for t in eachindex(q.dirs)
         e = q.dirs[t]
         # Tabulate the harmonic row once: it was previously evaluated twice per node — once
-        # inside `_site_potential(c, e)` and again in the accumulation loop. Indices run
+        # inside `site_potential(c, e)` and again in the accumulation loop. Indices run
         # contiguously 1..nlm in `lm_index` order, so `zrow` doubles as both.
         zrow[1] = Harmonics.Zlm_unsafe(0, 0, e)
         for l = 1:L
@@ -321,7 +343,7 @@ function multipole_average(q::SphereQuadrature, c::AbstractVector{<:Real},
                 zrow[Harmonics.lm_index(l, m)] = Harmonics.Zlm_unsafe(l, m, e)
             end
         end
-        # V(e) = Σ_{l≥1,m} c[lm]·Z_lm(e), in `_site_potential`'s summation order and zero-skip.
+        # V(e) = Σ_{l≥1,m} c[lm]·Z_lm(e), in `site_potential`'s summation order and zero-skip.
         v = 0.0
         for l = 1:L
             for m = -l:l

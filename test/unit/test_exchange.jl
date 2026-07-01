@@ -110,8 +110,9 @@ end
         # solve's handling of uncoupled (free) spins.
         lat = Lattice([8.0 0 0; 0 8.0 0; 0 0 10.0])
         cr = Crystal(lat, [0 0 0 0; 0 0 0 0; 0.0 0.25 0.5 0.75], [1, 1, 1, 1], ["Fe"])
-        b = SCEBasis(cr, Interaction(; nbody = 2, pair_cutoff = 2.6, lmax = [1], isotropy = true))
-        model = SCEPredictor(b, 0.0, [0.0137], b.salc_basis.keys)
+        b = SCEBasis(cr, BasisSpec(; nbody = 2, pair_cutoff = 2.6, lmax = [1], isotropy = true))
+        # only the first SALC (the 1-2 bond orbit) carries a coupling; the rest are zero
+        model = SCEPredictor(b, 0.0, vcat([0.0137], zeros(n_salcs(b) - 1)))
         ex = ExchangeModel(model)
         @test ex.natoms == 4
         @test ex.Jiso ≈ ex.Jiso'                                   # symmetric
@@ -142,15 +143,15 @@ end
         lat = Lattice(Matrix(3.0 * I(3)))
         # a single-ion (ls=[2]) model: now extracted into onsite (tensorial), not dropped
         cr1 = Crystal(lat, reshape([0.0, 0, 0], 3, 1), [1], ["Fe"])
-        b1 = SCEBasis(cr1, Interaction(; nbody = 1, pair_cutoff = 1.5, lmax = [2], isotropy = false))
-        m1 = SCEPredictor(b1, 0.0, ones(n_salcs(b1)), b1.salc_basis.keys)
+        b1 = SCEBasis(cr1, BasisSpec(; nbody = 1, pair_cutoff = 1.5, lmax = [2], isotropy = false))
+        m1 = SCEPredictor(b1, 0.0, ones(n_salcs(b1)))
         ex1 = ExchangeModel(m1)
         @test !ex1.isotropic
         @test norm(ex1.onsite[1]) > 0
         # higher-l 2-body channels ([1,2], [2,2]) are unsupported and reported
         cr2 = Crystal(lat, [0.2 -0.2; 0.0 0.0; 0.0 0.0], [1, 1], ["Fe"])
-        b2 = SCEBasis(cr2, Interaction(; nbody = 2, pair_cutoff = 1.5, lmax = [2], isotropy = false))
-        m2 = SCEPredictor(b2, 0.0, ones(n_salcs(b2)), b2.salc_basis.keys)
+        b2 = SCEBasis(cr2, BasisSpec(; nbody = 2, pair_cutoff = 1.5, lmax = [2], isotropy = false))
+        m2 = SCEPredictor(b2, 0.0, ones(n_salcs(b2)))
         @test_logs (:warn,) ExchangeModel(m2)
     end
 
@@ -160,5 +161,22 @@ end
         # zero couplings ⇒ no ordering instability ⇒ rejected
         @test_throws ArgumentError MFASampler(ExchangeModel(zeros(2, 2));
                                               reference = Float64[0 0; 0 0; 1 1])
+    end
+
+    @testset "inner-constructor invariants: Hermiticity and onsite length" begin
+        # bilinear[b,a] must equal bilinear[a,b]' — a directed tensor that breaks the
+        # pair symmetry is rejected by the inner constructor, not silently symmetrized
+        M = @SMatrix [0.0 0.3 0.0; -0.3 0.0 0.0; 0.0 0.0 -1.0]
+        bad = fill(zero(SMatrix{3,3,Float64,9}), 2, 2)
+        bad[1, 2] = M
+        bad[2, 1] = M                                   # should be M' (transpose)
+        @test_throws ArgumentError ExchangeModel(bad)
+        good = fill(zero(SMatrix{3,3,Float64,9}), 2, 2)
+        good[1, 2] = M
+        good[2, 1] = SMatrix{3,3,Float64}(M')
+        @test ExchangeModel(good) isa ExchangeModel
+        # one onsite matrix per atom, enforced
+        A = SMatrix{3,3,Float64}(1, 0, 0, 0, 1, 0, 0, 0, -2)
+        @test_throws ArgumentError ExchangeModel([0.0 -1.0; -1.0 0.0]; onsite = [A])
     end
 end

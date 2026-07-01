@@ -121,4 +121,49 @@ _mean_Z(l, m, configs, a) = mean(_Z(l, m, c[:, a]) for c in configs)
         @test m[1] ≈ 1.0 && m[2] ≈ 1.0                              # exchange-ordered
         @test m[3] == 0.0                                           # single-ion only ⇒ no net m
     end
+
+    @testset "single-ion-only atom: the drawn ensemble matches its m ≈ 0 label" begin
+        # The Metropolis regression for the flip proposal: atom 3 (no bilinear coupling,
+        # strong easy-axis single-ion) has an e ↔ −e symmetric double-well, so its label
+        # m₃ ≈ 0 — and the DRAWN configurations must agree (⟨e_z⟩ ≈ 0). A rotation-only
+        # chain started at +ê₃ stays in the +ẑ lobe (barrier ≫ kT) and would report
+        # ⟨e_z⟩ ≈ +1, silently contradicting the ensemble's own m label.
+        A = SMatrix{3,3,Float64}(1, 0, 0, 0, 1, 0, 0, 0, -2)
+        Jiso = [0.0 -1.0 0.0; -1.0 0.0 0.0; 0.0 0.0 0.0]
+        s = MFASampler(ExchangeModel(Jiso; onsite = [zero(A), zero(A), 4 .* A]);
+                       reference = Float64[0 0 0; 0 0 0; 1 1 1])
+        τ = 0.5
+        @test abs(mfa_sublattice_m(s, τ)[3]) < 1e-6                 # the quadrature label
+        samp = sample(s, 1500; tau = τ, rng = MersenneTwister(9))
+        @test abs(mean(c[3, 3] for c in samp.configs)) < 0.1        # not lobe-trapped
+        @test mean(c[3, 1] for c in samp.configs) > 0.5             # exchange atoms ordered
+    end
+
+    @testset "fixed / uniform / randomize on the Metropolis path" begin
+        # These keywords were only gated on the closed-form vMF path; the Metropolis sweep
+        # implements them independently, so pin the same semantics here.
+        A = SMatrix{3,3,Float64}(1, 0, 0, 0, 1, 0, 0, 0, -2)
+        s = MFASampler(ExchangeModel([0.0 -1.0; -1.0 0.0]; onsite = [A, A]);
+                       reference = Float64[0 0; 0 0; 1 1])
+        @test MR._needs_metropolis(s)
+        # fixed atoms stay exactly at the reference (no randomize)
+        samp = sample(s, 6; tau = 0.6, rng = MersenneTwister(4), fixed = [2])
+        @test all(c -> c[:, 2] ≈ [0, 0, 1.0], samp.configs)
+        # with randomize, fixed atoms ride the frame: unit norm, mutually parallel (both
+        # references are +ẑ), and generically no longer along +ẑ itself
+        sr = sample(s, 4; tau = 0.6, rng = MersenneTwister(4), fixed = [1, 2],
+                    randomize = true)
+        for c in sr.configs
+            @test norm(c[:, 1]) ≈ 1 atol = 1e-12
+            @test dot(c[:, 1], c[:, 2]) ≈ 1.0 atol = 1e-12
+        end
+        @test any(c -> abs(c[3, 1]) < 0.99, sr.configs)
+        # uniform atoms are isotropic regardless of the tensorial field
+        su = sample(s, 3000; tau = 0.3, rng = MersenneTwister(6), uniform = [1])
+        @test abs(mean(c[3, 1] for c in su.configs)) < 0.06
+        @test mean(c[3, 2] for c in su.configs) > 0.7
+        # guards (shared _resolve_taus / index validation on this path too)
+        @test_throws ArgumentError sample(s, 1; tau = 0.5, fixed = [99])
+        @test_throws ArgumentError sample(s, 2; tau = -0.1)
+    end
 end

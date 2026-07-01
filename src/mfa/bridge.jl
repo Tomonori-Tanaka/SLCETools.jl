@@ -8,7 +8,7 @@
 # Returns `(bilinear, onsite, nselfbond, nskipped)`; `nselfbond` counts on-site
 # (a == image-of-a) bilinear terms, which the rigid-axis mean field does not represent (only
 # reachable via AllImages); `nskipped` counts the higher-order / higher-`l` SALCs that are
-# not bilinear (kept instead by the full `MultipoleField` path).
+# not bilinear (kept instead by the full `MultipoleModel` path).
 function _extract_bilinear_onsite(model::SCEPredictor)
     terms = bilinear_terms(model)
     n = n_atoms(model)

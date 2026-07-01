@@ -59,6 +59,7 @@ the coupled self-consistency [`MFASampler`](@ref) solves for `ExchangeModel` sou
 """
 function thermal_averaged_m(τ::Real)::Float64
     τf = Float64(τ)
+    τf >= 0 || throw(ArgumentError("the reduced temperature τ must be ≥ 0; got $τf"))
     τf < _MFA_MIN_TAU && return 1.0
     τf > _MFA_MAX_TAU && return 0.0
     # f(m) = m − L(3m/τ) is increasing on (0,1): f(m_min) = m(1−1/τ) < 0 (for τ<1) and
@@ -167,6 +168,9 @@ end
 # sphere quadrature, with V_a = β(e·g_a + e' A_a e), β = 3/(ρτ). Returns (cs, m): the
 # per-atom single-site coefficient vectors `cs` (for the Metropolis draw) and the
 # magnetizations `m`. τ is floored at _MFA_MIN_TAU so β stays finite (T = 0 limit).
+# Deliberately NO τ > _MFA_MAX_TAU short-circuit (unlike `_coupled_state`): τ is reduced
+# by the l=1 Perron ρ only, and a single-ion term keeps m_a > 0 above the exchange T_MF
+# — the m = 0 shortcut valid for pure l=1 would be wrong here. Same for `_multipole_state`.
 function _tensor_state(exch::ExchangeModel, ehat::Vector{SVector{3,Float64}}, ρ::Float64,
                        τ::Float64)
     n = exch.natoms
@@ -305,7 +309,11 @@ function _multipole_state(mf::MultipoleModel, ehat::Vector{SVector{3,Float64}}, 
         end
         out
     end
-    flat, Δ = _anderson_solve(G!, flat0, -1.5, 1.5)
+    # |⟨Z_lm⟩| ≤ max_e |Z_lm(e)| ≤ √((2l+1)/4π) (the Z_{l,0} pole value), so clamp the
+    # Anderson iterate to the lmax-implied bound — a fixed ±1.5 would clip a legitimate
+    # converged average once l ≥ 14 (√((2·14+1)/4π) ≈ 1.52).
+    zcap = sqrt((2 * lmax + 1) / (4π))
+    flat, Δ = _anderson_solve(G!, flat0, -zcap, zcap)
     Δ > 1.0e-6 && @warn "the full-multipole mean-field self-consistency did not converge " *
         "at τ = $τ (residual $Δ); the multipole averages may be inaccurate (critical " *
         "slowing near T_MF, or a frustrated reference)."
@@ -313,6 +321,8 @@ function _multipole_state(mf::MultipoleModel, ehat::Vector{SVector{3,Float64}}, 
         Zavg[a][j] = flat[(a - 1) * nlm + j]
     end
     _site_coeffs_all!(cs, mf.terms, Zavg, β, n)
-    m = [dot((4π / 3) * _l1_field(Zavg[a]), ehat[a]) for a = 1:n]
+    # Clamp to the physical order-parameter range (matching `_tensor_state`): a not-fully-
+    # converged iterate near criticality can leave ⟨e·ê_a⟩ marginally outside [−1, 1].
+    m = [clamp(dot((4π / 3) * _l1_field(Zavg[a]), ehat[a]), -1.0, 1.0) for a = 1:n]
     return cs, m
 end
