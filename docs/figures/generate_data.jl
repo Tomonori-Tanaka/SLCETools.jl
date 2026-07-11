@@ -72,7 +72,8 @@ aligned = zeros(3, 8)
 aligned[3, :] .= 1.0
 E0 = predict_energy(model8, aligned)                    # ground state (j0 = 0)
 
-# The cube's mean-field scale is k_B·T_MF = 6|J_pair|/3 = 2|J_pair|, so span well above
+# The 2×2×2 periodic cell folds each ± neighbor pair onto one bond (z_eff = 3, Perron
+# ρ = 3|J_pair|), so the mean-field scale is k_B·T_MF = ρ/3 = |J_pair|. Span well above
 # (disordered) to well below (saturated): 8 → 0.3 in units of |J_pair|.
 ladder = [8.0, 4.0, 2.0, 1.0, 0.3] .* J8                # k_B T in eV, high → low
 samp8 = sample(mc8; kT = ladder, nsamples = 40, burnin = 60, thin = 3,

@@ -123,8 +123,9 @@ samp = sample(mc_hot;
     randomize   = false)                  # fixed frame, e.g. to watch the ordering
                                           #   axis develop during the anneal
 
-# pick out one temperature block by its label:
-configs_300K = [c for (c, T) in zip(samp.configs, samp.temperature) if T == 300]
+# pick out one temperature block by its label (≈, not ==: .temperature is the
+# derived kT/KB_EV round-trip, so exact float equality is not guaranteed):
+configs_300K = [c for (c, T) in zip(samp.configs, samp.temperature) if T ≈ 300]
 ```
 
 ## The `MCSample` output
@@ -158,7 +159,7 @@ orientation; with randomize it is Haar-uniform](../assets/mc_randomize.svg)
 
 *A 64-site ferromagnet at low temperature, started along `+z`: over the whole run the
 chain's mean axis barely leaves `ẑ` (blue), while the `randomize`d stored copies cover
-all orientations uniformly (green) — same chain, same seed.*
+all orientations uniformly (green) — two same-seed runs differing only in `randomize`.*
 
 - **isotropic model** — the rotated configurations are still exact Boltzmann samples
   (the energy is invariant; `.energy` is recomputed on the stored copy and machine-equal),

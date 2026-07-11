@@ -279,17 +279,24 @@ end
 # value can never be silently read as an energy (or vice versa).
 function _resolve_kT(temperature, kT)::Vector{Float64}
     (temperature === nothing) == (kT === nothing) && throw(ArgumentError(
-        "provide exactly one of `temperature` (kelvin) or `kT` (k_B·T, model energy units)"))
+        "provide exactly one of `temperature` (kelvin) or `kT` " *
+        "(k_B·T, model energy units)"))
     vals = if kT !== nothing
         kT isa Real ? [Float64(kT)] : Float64[Float64(x) for x in kT]
     else
-        temperature isa Real ? [KB_EV * Float64(temperature)] :
-            Float64[KB_EV * Float64(x) for x in temperature]
+        # validate in kelvin first, so the error echoes the unit the caller used
+        ts = temperature isa Real ? [Float64(temperature)] :
+            Float64[Float64(x) for x in temperature]
+        for T in ts
+            (isfinite(T) && T > 0) || throw(ArgumentError(
+                "temperature must be finite and > 0 kelvin; got $T"))
+        end
+        KB_EV .* ts
     end
     isempty(vals) && throw(ArgumentError("the temperature/kT collection is empty"))
     for x in vals
         (isfinite(x) && x > 0) || throw(ArgumentError(
-            "temperature/kT must be finite and > 0; got k_B·T = $x"))
+            "kT must be finite and > 0 (k_B·T, model energy units); got $x"))
     end
     return vals
 end
