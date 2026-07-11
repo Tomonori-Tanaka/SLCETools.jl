@@ -84,10 +84,12 @@ Construction fidelity ladder: `MFASampler(reference)` (single global isotropic) 
 
 `MetropolisSampler(model::SCEPredictor; reference = nothing)` is the joint-Boltzmann
 sibling behind the same `sample` verb: single-spin Metropolis on the training cell at an
-**absolute** `temperature = k_B·T` (model energy units — no `τ`, no `l=1` Perron scale,
-so any body order works) → `MCSample` (configs + parallel `temperature` / `energy` /
-`acceptance`). Scope is configuration sampling only; supercell tiling and thermodynamic
-observables (`m(T)`, `T_c`) are explicitly deferred — see `docs/specs/mc-sampling.md`.
+**absolute** temperature — exactly one of `temperature` [kelvin, via `SCETools.KB_EV`,
+eV-model assumption] or `kT` [`k_B·T`, model energy units] (no `τ`, no `l=1` Perron
+scale, so any body order works) → `MCSample` (configs + parallel `kT` / `temperature` /
+`energy` / `acceptance`). Scope is configuration sampling only; supercell tiling and
+thermodynamic observables (`m(T)`, `T_c`) are explicitly deferred — see
+`docs/specs/mc-sampling.md`.
 
 ## Public API (VASP I/O — `SCETools.VASP`)
 

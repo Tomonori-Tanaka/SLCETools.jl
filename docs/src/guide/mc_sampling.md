@@ -24,18 +24,28 @@ correlation the MC sampler exists to keep.*
 mc = MetropolisSampler(model)                       # model::SCEPredictor
 mc = MetropolisSampler(model; reference)            # reference = default chain start
 
-# n configurations at one absolute temperature (k_B·T, model energy units)
-samp = sample(mc, 200; temperature = 0.02, rng = MersenneTwister(1))
+# n configurations at one absolute temperature — in kelvin, or as k_B·T in eV
+samp = sample(mc, 200; temperature = 300, rng = MersenneTwister(1))
+samp = sample(mc, 200; kT = 0.02, rng = MersenneTwister(1))
 
 # an annealing sweep: the chain warm-starts each next temperature
-samp = sample(mc; temperature = [0.15, 0.08, 0.04, 0.02], nsamples = 50)
+samp = sample(mc; temperature = [1200, 900, 600, 300], nsamples = 50)
 ```
 
-Unlike the mean-field sampler there is **no reduced temperature**: `temperature` is the
-absolute ``k_B T`` in the model's energy units (eV for an eV-fitted model), so the
-sampler works for any body order — including models without a bilinear (``l=1``) channel,
-where ``T_{\mathrm{MF}}`` is not even defined. To compare against mean-field results at
-reduced ``\tau``, convert with `temperature = τ * mfa_temperature_scale(mfa_sampler)`.
+Unlike the mean-field sampler there is **no reduced temperature** — the control is
+absolute, under exactly one of two keywords (so a kelvin value can never be silently
+read as an energy):
+
+- `temperature` — kelvin, converted internally with `SCETools.KB_EV`
+  (``k_B = 8.617 \times 10^{-5}`` eV/K). This assumes the model's energy unit is eV —
+  the package-wide convention for DFT-fitted models.
+- `kT` — ``k_B T`` directly in the model's energy units. Use this for theoretical runs
+  in coupling units (`kT = 2 * abs(J)`), for the test suite, or for a non-eV model.
+
+Absolute control works for any body order — including models without a bilinear
+(``l=1``) channel, where ``T_{\mathrm{MF}}`` is not even defined. To compare against
+mean-field results at reduced ``\tau``, convert with
+`kT = τ * mfa_temperature_scale(mfa_sampler)`.
 
 In the collection form the chain state **carries over** between consecutive temperatures
 (with a fresh burn-in at each), so ordering high → low is an annealing run — useful for
@@ -71,7 +81,8 @@ configurations) with MC-native labels:
 | Field | Contents |
 |---|---|
 | `.configs` | `Vector` of `3 × n_atoms` configurations (unit columns) |
-| `.temperature` | the ``k_B T`` of each configuration |
+| `.kT` | each configuration's ``k_B T`` in the model's energy units |
+| `.temperature` | the same in kelvin (`= kT / SCETools.KB_EV`; assumes an eV model) |
 | `.energy` | that configuration's SCE energy (model units, `j0` excluded) |
 | `.acceptance` | Metropolis accept fraction over the sweeps that produced it |
 
@@ -109,7 +120,7 @@ all orientations uniformly (green) — same chain, same seed.*
 | | [`MFASampler`](@ref) | [`MetropolisSampler`](@ref) |
 |---|---|---|
 | distribution | single-site mean field (no correlations) | joint Boltzmann (correlated) |
-| control | reduced ``\tau = T/T_{\mathrm{MF}}`` (or `m`) | absolute ``k_B T`` |
+| control | reduced ``\tau = T/T_{\mathrm{MF}}`` (or `m`) | absolute: `temperature` [K] / `kT` [energy] |
 | cost | closed form / short per-site chains | lattice Markov chain |
 | smooth per-atom distribution ``P(\boldsymbol e_a)`` | yes (coefficients) | histogram only |
 | needs an ``l=1`` channel | yes (sets ``T_{\mathrm{MF}}``) | no |

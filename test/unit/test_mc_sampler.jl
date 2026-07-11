@@ -95,7 +95,7 @@ _mc_rand_config(rng, n) = reduce(hcat, [Vector(MR._random_unit(rng)) for _ = 1:n
         @test J < 0                                    # ferro
         for (βJmag, nconf) in ((1.0, 4000), (2.5, 4000))
             T = abs(J) / βJmag
-            samp = sample(s, nconf; temperature = T, burnin = 400, thin = 6,
+            samp = sample(s, nconf; kT = T, burnin = 400, thin = 6,
                           rng = MersenneTwister(11))
             c12 = mean(dot(c[:, 1], c[:, 2]) for c in samp)
             exact = -_mc_langevin(J / T)
@@ -114,7 +114,7 @@ _mc_rand_config(rng, n) = reduce(hcat, [Vector(MR._random_unit(rng)) for _ = 1:n
         h = c0 * MR.Harmonics.N1                       # V(e) = h·e_z
         for βh in (1.0, 3.0)
             T = h / βh
-            samp = sample(s, 4000; temperature = T, burnin = 400, thin = 5,
+            samp = sample(s, 4000; kT = T, burnin = 400, thin = 5,
                           rng = MersenneTwister(2))
             mz = mean(c[3, 1] for c in samp)
             @test mz ≈ -_mc_langevin(βh) atol = 0.03      # P ∝ exp(−βh·e_z)
@@ -126,9 +126,9 @@ _mc_rand_config(rng, n) = reduce(hcat, [Vector(MR._random_unit(rng)) for _ = 1:n
         # Same seed ⇒ both chains are identical up to the first storage point; the
         # randomize run then rotates its stored copy. Isotropy ⇒ equal energy; the Gram
         # matrix (all relative angles) is rotation-invariant.
-        a = sample(s, 1; temperature = 0.02, burnin = 50, thin = 5,
+        a = sample(s, 1; kT = 0.02, burnin = 50, thin = 5,
                    rng = MersenneTwister(5))
-        b = sample(s, 1; temperature = 0.02, burnin = 50, thin = 5,
+        b = sample(s, 1; kT = 0.02, burnin = 50, thin = 5,
                    rng = MersenneTwister(5), randomize = true)
         @test !(a.configs[1] ≈ b.configs[1])           # actually rotated
         @test b.energy[1] ≈ a.energy[1] atol = 1e-12   # isotropic invariance
@@ -141,22 +141,22 @@ _mc_rand_config(rng, n) = reduce(hcat, [Vector(MR._random_unit(rng)) for _ = 1:n
 
     @testset "seed reproducibility (byte-identical), incl. sweep + randomize" begin
         s = MetropolisSampler(_mc_dimer_model())
-        kw = (; temperature = [0.05, 0.02], nsamples = 5, burnin = 30, thin = 3,
+        kw = (; kT = [0.05, 0.02], nsamples = 5, burnin = 30, thin = 3,
               randomize = true)
         a = sample(s; kw..., rng = MersenneTwister(3))
         b = sample(s; kw..., rng = MersenneTwister(3))
         @test a.configs == b.configs
         @test a.energy == b.energy
         @test a.acceptance == b.acceptance
-        @test a.temperature == b.temperature
+        @test a.kT == b.kT
     end
 
     @testset "sweep structure, warm start, diagnostics" begin
         s = MetropolisSampler(_mc_dimer_model())
-        samp = sample(s; temperature = [0.2, 0.005], nsamples = 4, burnin = 100,
+        samp = sample(s; kT = [0.2, 0.005], nsamples = 4, burnin = 100,
                       thin = 4, rng = MersenneTwister(9))
         @test length(samp) == 8
-        @test samp.temperature == [fill(0.2, 4); fill(0.005, 4)]   # value-outer
+        @test samp.kT == [fill(0.2, 4); fill(0.005, 4)]   # value-outer
         @test all(0 .< samp.acceptance .<= 1)
         # annealing high → low: the ferro dimer's bond energy drops toward J
         @test mean(samp.energy[5:8]) < mean(samp.energy[1:4])
@@ -172,31 +172,50 @@ _mc_rand_config(rng, n) = reduce(hcat, [Vector(MR._random_unit(rng)) for _ = 1:n
         ref = Float64[0 0 0 0; 0 0 0 0; 1 1 1 1]
         s = MetropolisSampler(_mc_dimer_model(); reference = ref)
         # burnin = 0, thin = 1 at low T from the reference: stays near it
-        samp = sample(s, 1; temperature = 1e-4, burnin = 0, thin = 1,
+        samp = sample(s, 1; kT = 1e-4, burnin = 0, thin = 1,
                       rng = MersenneTwister(1))
         @test mean(samp.configs[1][3, 1:2]) > 0.9
         # explicit init overrides the reference
         init = Float64[0 0 0 0; 0 0 0 0; -1 -1 -1 -1]
-        samp2 = sample(s, 1; temperature = 1e-4, burnin = 0, thin = 1,
+        samp2 = sample(s, 1; kT = 1e-4, burnin = 0, thin = 1,
                        rng = MersenneTwister(1), init = init)
         @test mean(samp2.configs[1][3, 1:2]) < -0.9
+    end
+
+    @testset "kelvin ↔ kT control" begin
+        s = MetropolisSampler(_mc_dimer_model())
+        kb = SCETools.KB_EV
+        a = sample(s, 3; temperature = 300.0, burnin = 20, thin = 2,
+                   rng = MersenneTwister(6))
+        b = sample(s, 3; kT = kb * 300.0, burnin = 20, thin = 2,
+                   rng = MersenneTwister(6))
+        @test a.configs == b.configs                   # the two controls drive one chain
+        @test a.kT == b.kT
+        @test a.kT ≈ fill(kb * 300.0, 3)
+        @test a.temperature ≈ fill(300.0, 3)           # kelvin label round-trips
+        @test b.temperature ≈ fill(300.0, 3)
+        # exactly one control; kelvin validated too
+        @test_throws ArgumentError sample(s, 1; temperature = 300.0, kT = 0.02)
+        @test_throws ArgumentError sample(s, 1)
+        @test_throws ArgumentError sample(s, 1; temperature = 0.0)
+        @test_throws ArgumentError sample(s, 1; temperature = -5.0)
     end
 
     @testset "guards" begin
         model = _mc_dimer_model()
         s = MetropolisSampler(model)
-        @test_throws ArgumentError sample(s, 1; temperature = 0.0)
-        @test_throws ArgumentError sample(s, 1; temperature = -0.1)
-        @test_throws ArgumentError sample(s; temperature = [0.1, 0.0])
-        @test_throws ArgumentError sample(s; temperature = Float64[])
-        @test_throws ArgumentError sample(s, -1; temperature = 0.1)
-        @test_throws ArgumentError sample(s, 1; temperature = [0.1, 0.2])  # scalar form
-        @test_throws ArgumentError sample(s, 1; temperature = 0.1, thin = 0)
-        @test_throws ArgumentError sample(s, 1; temperature = 0.1, burnin = -1)
-        @test_throws ArgumentError sample(s, 1; temperature = 0.1, step = 0.0)
-        @test_throws DimensionMismatch sample(s, 1; temperature = 0.1,
+        @test_throws ArgumentError sample(s, 1; kT = 0.0)
+        @test_throws ArgumentError sample(s, 1; kT = -0.1)
+        @test_throws ArgumentError sample(s; kT = [0.1, 0.0])
+        @test_throws ArgumentError sample(s; kT = Float64[])
+        @test_throws ArgumentError sample(s, -1; kT = 0.1)
+        @test_throws ArgumentError sample(s, 1; kT = [0.1, 0.2])  # scalar form
+        @test_throws ArgumentError sample(s, 1; kT = 0.1, thin = 0)
+        @test_throws ArgumentError sample(s, 1; kT = 0.1, burnin = -1)
+        @test_throws ArgumentError sample(s, 1; kT = 0.1, step = 0.0)
+        @test_throws DimensionMismatch sample(s, 1; kT = 0.1,
                                               init = Float64[0 0; 0 0; 1 1])
-        @test_throws ArgumentError sample(s, 1; temperature = 0.1,
+        @test_throws ArgumentError sample(s, 1; kT = 0.1,
                                           init = Float64[0 0 0 0; 0 0 0 0; 1 1 1 0])
         # ctor invariants
         t = MR._MFATerm(1.0, [1], [1], [0.0, 1.0, 0.0])

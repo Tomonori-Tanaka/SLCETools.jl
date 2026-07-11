@@ -13,8 +13,9 @@ spin-configuration sampler** — draw physically representative finite-temperatu
 configurations from the single-site mean field of a fitted model (or a hand-built
 exchange model) at a controlled reduced temperature `τ = T/T_MF`. Its joint-Boltzmann
 sibling is the **Metropolis MC sampler** (`src/mc/metropolis.jl`, `MetropolisSampler`):
-correlated configurations on the training cell at an **absolute** `k_B·T` (model energy
-units — deliberately *not* `τ`; the model need not have a bilinear channel). Future
+correlated configurations on the training cell at an **absolute** temperature —
+`temperature` [K, via `KB_EV`, assumes an eV model] or `kT` [model energy units], exactly
+one (deliberately *not* `τ`; the model need not have a bilinear channel). Future
 components (active learning, configuration / diagnostic helpers) live alongside. Priority:
 numerical correctness and reproducibility, and the same physical conventions as the
 core (this package never re-derives them — it reads the fitted Hamiltonian through the

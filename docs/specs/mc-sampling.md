@@ -23,15 +23,22 @@ e.g. for active learning), not thermodynamic observables.
   the chain is the `n_atoms`-spin periodic system the model was fitted on — exactly the
   right ensemble for training-cell configuration proposals. A larger cell (tiling the
   terms by their `shifts`) is the natural extension for observables; deferred.
-- **M3 — absolute temperature.** The control variable is `temperature = k_B·T` in the
-  model's energy units (`β = 1/temperature`). The mean-field `τ = T/T_MF` is *not* used:
-  `T_MF` comes from the `l=1` bilinear Perron eigenvalue, which need not exist (a purely
-  biquadratic model has no bilinear channel), and true MC needs no linearized scale.
+- **M3 — absolute temperature, dual keyword.** The control is absolute (the mean-field
+  `τ = T/T_MF` is *not* used: `T_MF` comes from the `l=1` bilinear Perron eigenvalue,
+  which need not exist, and true MC needs no linearized scale), under **exactly one** of
+  two keywords: `temperature` in **kelvin** (converted with `KB_EV`, the exact CODATA
+  `k_B` in eV/K — assumes an eV-fitted model, the package convention) or `kT` = `k_B·T`
+  directly in the model's energy units (theory/test runs in coupling units, non-eV
+  models). Internally everything is `β = 1/kT`. The two live under *distinct names*
+  deliberately: a single keyword serving both would let `temperature = 300` (meant as
+  kelvin) be read as 300 eV — a silent infinite-temperature run. `MCSample` carries both
+  labels (`kT` always well-defined; `temperature = kT/KB_EV`).
 - **M4 — API parity behind `AbstractSampler`.** `MetropolisSampler <: AbstractSampler`,
   sampling through the same two `sample` forms as the mean field (positional `n` at one
-  value / keyword collection sweep). The result is a new labeled type `MCSample`
-  (`configs` + parallel `temperature` / `energy` / `acceptance`) — the `MFASample`
-  labels (`tau`, per-atom mean-field `m`) do not apply. Same array interface.
+  value / keyword collection sweep; the exactly-one `temperature`/`kT` rule mirrors the
+  mean field's `tau`/`m`). The result is a new labeled type `MCSample` (`configs` +
+  parallel `kT` / `temperature` / `energy` / `acceptance`) — the `MFASample` labels
+  (`tau`, per-atom mean-field `m`) do not apply. Same array interface.
 - **M5 — β in the accept step only.** Site coefficients `c_a` and every stored energy
   stay in the model's energy units; the acceptance uses `exp(−βΔE)`. (The mean-field
   kernel instead folds β into `c_a` — call sites differ, the contraction is shared.)

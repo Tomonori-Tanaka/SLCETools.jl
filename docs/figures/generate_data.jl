@@ -55,7 +55,7 @@ end
 open(joinpath(DATA, "fig1_mc.csv"), "w") do io
     println(io, "t,corr,stderr")
     for (i, t) in enumerate([0.05, 0.1, 0.15, 0.2, 0.3, 0.4, 0.55, 0.7, 0.9, 1.1])
-        samp = sample(mc, 2000; temperature = t * Jabs, burnin = 500, thin = 8,
+        samp = sample(mc, 2000; kT = t * Jabs, burnin = 500, thin = 8,
                       rng = MersenneTwister(100 + i))
         c12 = [dot(c[:, 1], c[:, 2]) for c in samp]
         println(io, t, ",", mean(c12), ",", std(c12) / sqrt(length(c12)))
@@ -75,13 +75,13 @@ E0 = predict_energy(model8, aligned)                    # ground state (j0 = 0)
 # The cube's mean-field scale is k_B·T_MF = 6|J_pair|/3 = 2|J_pair|, so span well above
 # (disordered) to well below (saturated): 8 → 0.3 in units of |J_pair|.
 ladder = [8.0, 4.0, 2.0, 1.0, 0.3] .* J8                # k_B T in eV, high → low
-samp8 = sample(mc8; temperature = ladder, nsamples = 40, burnin = 60, thin = 3,
+samp8 = sample(mc8; kT = ladder, nsamples = 40, burnin = 60, thin = 3,
                rng = MersenneTwister(7))                # random init, warm-started ladder
 open(joinpath(DATA, "fig2_trace.csv"), "w") do io
     println(io, "# E0 = ", E0, "  Jabs = ", J8)
     println(io, "idx,t_over_J,energy,acceptance")
-    for (k, (T, E, a)) in enumerate(zip(samp8.temperature, samp8.energy, samp8.acceptance))
-        println(io, k, ",", T / J8, ",", E, ",", a)
+    for (k, (kt, E, a)) in enumerate(zip(samp8.kT, samp8.energy, samp8.acceptance))
+        println(io, k, ",", kt / J8, ",", E, ",", a)
     end
 end
 println("fig2 done")
@@ -105,7 +105,7 @@ J64 = maximum(abs, ExchangeModel(model64).Jiso)
 init = zeros(3, 64)
 init[3, :] .= 1.0
 axis_z(c) = normalize(vec(mean(c; dims = 2)))[3]
-kw = (; temperature = 0.1 * J64, burnin = 50, thin = 2, init = init)
+kw = (; kT = 0.1 * J64, burnin = 50, thin = 2, init = init)
 off = sample(mc64, 200; kw..., rng = MersenneTwister(21))
 on = sample(mc64, 200; kw..., rng = MersenneTwister(21), randomize = true)
 open(joinpath(DATA, "fig3_axis.csv"), "w") do io

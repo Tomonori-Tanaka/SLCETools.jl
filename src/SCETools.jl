@@ -87,6 +87,7 @@ export SiteDistributionField, mfa_site_coefficients, write_mfa_distributions
 # them by qualification. Declared with the `public` keyword so the tier is
 # machine-checkable (`Base.ispublic`, Aqua) instead of a comment-only promise.
 public MultipoleModel                       # coupling digest (built via `MFASampler(model)`)
+public KB_EV                                # Boltzmann constant, eV/K (kelvin ↔ kT)
 public SphereGrid, fibonacci_sphere, harmonic_basis, site_probabilities  # viz plumbing
 public MeanFieldEngine, VASP                # engine kernels / the VASP adapter submodule
 

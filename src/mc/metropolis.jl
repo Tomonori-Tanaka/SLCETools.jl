@@ -17,6 +17,16 @@
 # `c_a` and every stored energy stay in the model's energy units.
 
 """
+    KB_EV
+
+Boltzmann's constant in eV/K (the exact CODATA ratio `1.380649e-23 J/K` /
+`1.602176634e-19 J/eV`). Converts the kelvin control of [`sample`](@ref) on a
+[`MetropolisSampler`](@ref) to the energy scale of an **eV-fitted** model:
+`kT = KB_EV * temperature`.
+"""
+const KB_EV = 1.380649e-23 / 1.602176634e-19
+
+"""
     MetropolisSampler(model::SCEPredictor; reference = nothing)
 
 Single-spin Metropolis Monte-Carlo sampler of the **joint** Boltzmann distribution
@@ -25,10 +35,10 @@ already folded into the fitted terms). Complements the mean-field [`MFASampler`]
 the draws carry the model's true inter-site correlations, at the cost of a Markov chain
 (burn-in / thinning) instead of closed-form single-site draws.
 
-The control variable of [`sample`](@ref) is the **absolute temperature** `k_B·T` in the
-model's energy units (eV for an eV-fitted model) — not the reduced `τ = T/T_MF` of the
-mean-field sampler — so any body order works, including models without a bilinear
-(`l=1`) channel.
+The control variable of [`sample`](@ref) is the **absolute temperature** — `temperature`
+in kelvin (converted with [`KB_EV`](@ref); assumes an eV-fitted model) or `kT` directly
+in the model's energy units — not the reduced `τ = T/T_MF` of the mean-field sampler.
+Any body order works, including models without a bilinear (`l=1`) channel.
 
 `reference` (optional, `3 × n_atoms` unit columns) sets the default chain start; without
 it a chain starts from a uniform-random configuration (see `init` in [`sample`](@ref)).
@@ -90,26 +100,28 @@ Base.show(io::IO, s::MetropolisSampler) =
 
 Labeled result of [`sample`](@ref) on a [`MetropolisSampler`](@ref). `configs` is the
 bare `Vector{Matrix{Float64}}` (each `3 × n_atoms` unit directions); the parallel labels
-are `temperature` (`k_B·T`, model energy units), `energy` (the SCE energy of that stored
-configuration, `j0` excluded — a constant shift), and `acceptance` (the Metropolis
-accept fraction over the sweeps that produced it; the first configuration at each
-temperature includes its burn-in window). The object is iterable and indexable as its
-`configs`.
+are `kT` (`k_B·T` in the model's energy units — always well-defined), `temperature`
+(kelvin, `= kT / KB_EV` — meaningful for an eV-fitted model), `energy` (the SCE energy
+of that stored configuration, `j0` excluded — a constant shift), and `acceptance` (the
+Metropolis accept fraction over the sweeps that produced it; the first configuration at
+each temperature includes its burn-in window). The object is iterable and indexable as
+its `configs`.
 """
 struct MCSample
     configs::Vector{Matrix{Float64}}
+    kT::Vector{Float64}
     temperature::Vector{Float64}
     energy::Vector{Float64}
     acceptance::Vector{Float64}
 
-    function MCSample(configs::Vector{Matrix{Float64}}, temperature::Vector{Float64},
+    function MCSample(configs::Vector{Matrix{Float64}}, kT::Vector{Float64},
                       energy::Vector{Float64}, acceptance::Vector{Float64})
-        (length(configs) == length(temperature) == length(energy) == length(acceptance)) ||
+        (length(configs) == length(kT) == length(energy) == length(acceptance)) ||
             throw(DimensionMismatch(
-                "configs/temperature/energy/acceptance must be parallel; got " *
-                "$(length(configs)) / $(length(temperature)) / $(length(energy)) / " *
+                "configs/kT/energy/acceptance must be parallel; got " *
+                "$(length(configs)) / $(length(kT)) / $(length(energy)) / " *
                 "$(length(acceptance))"))
-        return new(configs, temperature, energy, acceptance)
+        return new(configs, kT, kT ./ KB_EV, energy, acceptance)
     end
 end
 
@@ -261,31 +273,42 @@ function _mc_initial_config(s::MetropolisSampler,
     return cfg
 end
 
-# Resolve a scalar or collection `temperature` into a validated vector (k_B·T > 0).
-function _resolve_temperatures(temperature)::Vector{Float64}
-    temps = temperature isa Real ? [Float64(temperature)] :
-        Float64[Float64(T) for T in temperature]
-    isempty(temps) && throw(ArgumentError("the temperature collection is empty"))
-    for T in temps
-        (isfinite(T) && T > 0) || throw(ArgumentError(
-            "temperature must be finite and > 0 (k_B·T in the model's energy units); got $T"))
+# Resolve exactly one of `temperature` (kelvin) / `kT` (model energy units) — scalar or
+# collection — into a validated k_B·T vector in the model's energy units. Mirrors the
+# mean-field `_resolve_taus` tau/m pattern; the two live under distinct names so a kelvin
+# value can never be silently read as an energy (or vice versa).
+function _resolve_kT(temperature, kT)::Vector{Float64}
+    (temperature === nothing) == (kT === nothing) && throw(ArgumentError(
+        "provide exactly one of `temperature` (kelvin) or `kT` (k_B·T, model energy units)"))
+    vals = if kT !== nothing
+        kT isa Real ? [Float64(kT)] : Float64[Float64(x) for x in kT]
+    else
+        temperature isa Real ? [KB_EV * Float64(temperature)] :
+            Float64[KB_EV * Float64(x) for x in temperature]
     end
-    return temps
+    isempty(vals) && throw(ArgumentError("the temperature/kT collection is empty"))
+    for x in vals
+        (isfinite(x) && x > 0) || throw(ArgumentError(
+            "temperature/kT must be finite and > 0; got k_B·T = $x"))
+    end
+    return vals
 end
 
 """
-    sample(s::MetropolisSampler, n; temperature, burnin = 200, thin = 10, step = 0.6,
+    sample(s::MetropolisSampler, n; temperature, kT, burnin = 200, thin = 10, step = 0.6,
            rng, init = nothing, randomize = false) -> MCSample
-    sample(s::MetropolisSampler; temperature, nsamples = 1, burnin = 200, thin = 10,
+    sample(s::MetropolisSampler; temperature, kT, nsamples = 1, burnin = 200, thin = 10,
            step = 0.6, rng, init = nothing, randomize = false) -> MCSample
 
 Draw spin configurations from the joint Boltzmann distribution of the fitted SCE by
-single-spin Metropolis. `temperature` is the **absolute** `k_B·T` in the model's energy
-units (eV for an eV-fitted model) — every entry must be `> 0`.
+single-spin Metropolis. Provide **exactly one** absolute-temperature control:
+`temperature` in **kelvin** (converted with [`KB_EV`](@ref) — assumes the model's energy
+unit is eV, the package convention) or `kT` — `k_B·T` directly in the model's energy
+units (theory/test runs, non-eV models). Every entry must be `> 0`.
 
 The first form draws `n` configurations at a single temperature. The second sweeps a
-**collection** `temperature` and draws `nsamples` configurations per value, ordered
-value-outer / sample-inner; the chain state **carries over** between consecutive
+**collection** (`temperature` or `kT`) and draws `nsamples` configurations per value,
+ordered value-outer / sample-inner; the chain state **carries over** between consecutive
 temperatures (with a fresh `burnin` at each), so a high→low ordering is an annealing
 run — call once per temperature for independent chains.
 
@@ -306,36 +329,38 @@ run — call once per temperature for independent chains.
   rotation changes the energy, so the result is data augmentation, not an equilibrium
   sample.
 
-Returns an [`MCSample`](@ref): `.configs` with parallel labels `.temperature`, `.energy`
-(the stored — rotated, if `randomize` — configuration's SCE energy, `j0` excluded), and
-`.acceptance` (accept fraction over the sweeps producing each configuration).
+Returns an [`MCSample`](@ref): `.configs` with parallel labels `.kT` (model energy
+units), `.temperature` (kelvin), `.energy` (the stored — rotated, if `randomize` —
+configuration's SCE energy, `j0` excluded), and `.acceptance` (accept fraction over the
+sweeps producing each configuration).
 """
-function sample(s::MetropolisSampler, n::Integer; temperature,
+function sample(s::MetropolisSampler, n::Integer; temperature = nothing, kT = nothing,
                 burnin::Integer = 200, thin::Integer = 10, step::Real = 0.6,
                 rng::AbstractRNG = default_rng(),
                 init::Union{Nothing,AbstractMatrix{<:Real}} = nothing,
                 randomize::Bool = false)::MCSample
     n >= 0 || throw(ArgumentError("n must be ≥ 0; got $n"))
-    temps = _resolve_temperatures(temperature)
-    length(temps) == 1 ||
-        throw(ArgumentError("the positional `n` form takes a scalar `temperature`; " *
+    kts = _resolve_kT(temperature, kT)
+    length(kts) == 1 ||
+        throw(ArgumentError("the positional `n` form takes a scalar `temperature`/`kT`; " *
                             "pass a collection without `n` to sweep"))
-    return _mc_run(s, temps, n, burnin, thin, step, rng, init, randomize)
+    return _mc_run(s, kts, n, burnin, thin, step, rng, init, randomize)
 end
 
-function sample(s::MetropolisSampler; temperature, nsamples::Integer = 1,
+function sample(s::MetropolisSampler; temperature = nothing, kT = nothing,
+                nsamples::Integer = 1,
                 burnin::Integer = 200, thin::Integer = 10, step::Real = 0.6,
                 rng::AbstractRNG = default_rng(),
                 init::Union{Nothing,AbstractMatrix{<:Real}} = nothing,
                 randomize::Bool = false)::MCSample
     nsamples >= 0 || throw(ArgumentError("nsamples must be ≥ 0; got $nsamples"))
-    return _mc_run(s, _resolve_temperatures(temperature), nsamples, burnin, thin, step,
+    return _mc_run(s, _resolve_kT(temperature, kT), nsamples, burnin, thin, step,
                    rng, init, randomize)
 end
 
-# Core driver: for each temperature, `burnin` sweeps then `per` stored configurations
+# Core driver: for each k_B·T value, `burnin` sweeps then `per` stored configurations
 # `thin` sweeps apart, warm-starting consecutive temperatures from the running chain.
-function _mc_run(s::MetropolisSampler, temps::Vector{Float64}, per::Integer,
+function _mc_run(s::MetropolisSampler, kts::Vector{Float64}, per::Integer,
                  burnin::Integer, thin::Integer, step::Real, rng::AbstractRNG,
                  init::Union{Nothing,AbstractMatrix{<:Real}}, randomize::Bool)::MCSample
     burnin >= 0 || throw(ArgumentError("burnin must be ≥ 0; got $burnin"))
@@ -351,14 +376,14 @@ function _mc_run(s::MetropolisSampler, temps::Vector{Float64}, per::Integer,
     c = zeros(nlm)
     Znew = zeros(nlm)
 
-    total = length(temps) * per
+    total = length(kts) * per
     configs = Vector{Matrix{Float64}}(undef, total)
-    temp_lab = Vector{Float64}(undef, total)
+    kt_lab = Vector{Float64}(undef, total)
     energy = Vector{Float64}(undef, total)
     acceptance = Vector{Float64}(undef, total)
     k = 0
-    for T in temps
-        β = 1.0 / T
+    for kt in kts
+        β = 1.0 / kt
         nacc, natt = 0, 0
         for _ = 1:burnin
             nacc += _mc_sweep!(rng, config, Zcur, s, β, stepf, c, Znew)
@@ -377,11 +402,11 @@ function _mc_run(s::MetropolisSampler, temps::Vector{Float64}, per::Integer,
             end
             k += 1
             configs[k] = out
-            temp_lab[k] = T
+            kt_lab[k] = kt
             energy[k] = E
             acceptance[k] = nacc / natt
             nacc, natt = 0, 0
         end
     end
-    return MCSample(configs, temp_lab, energy, acceptance)
+    return MCSample(configs, kt_lab, energy, acceptance)
 end

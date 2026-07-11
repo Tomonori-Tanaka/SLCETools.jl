@@ -19,7 +19,8 @@ The interface a subtype implements: `sample(s, n; <control>, rng, ...)` returnin
 labeled result ([`MFASample`](@ref) / [`MCSample`](@ref) — configurations in the
 `3 × n_atoms` unit-column layout with parallel per-config labels). The control variable
 is sampler-specific (the reduced `tau`/`m` for the mean field, the absolute
-`temperature` for the MC), as is, where meaningful, `mfa_temperature_scale(s)`.
+`temperature` [K] / `kT` [energy units] for the MC), as is, where meaningful,
+`mfa_temperature_scale(s)`.
 """
 abstract type AbstractSampler end
 

@@ -11,17 +11,20 @@ release, so everything lives under *Unreleased*.
 - **`MetropolisSampler(model::SCEPredictor; reference = nothing)` + `sample(...) ->
   MCSample`** (`src/mc/metropolis.jl`): single-spin Metropolis on the **joint** Boltzmann
   distribution of the fitted SCE over its training cell — the correlated sibling of the
-  single-site mean-field `MFASampler`, behind the same `sample` verb. The control is the
-  **absolute** `temperature = k_B·T` in the model's energy units (no reduced `τ`, no `l=1`
-  Perron scale, so any body order works — including models without a bilinear channel).
+  single-site mean-field `MFASampler`, behind the same `sample` verb. The control is
+  absolute — exactly one of `temperature` (**kelvin**, converted with the public
+  `SCETools.KB_EV`; assumes an eV-fitted model) or `kT` (`k_B·T` in the model's energy
+  units, for theory/test runs and non-eV models); no reduced `τ`, no `l=1` Perron scale,
+  so any body order works — including models without a bilinear channel. Distinct
+  keyword names so a kelvin value can never be silently read as an energy.
   Each attempt contracts the fitted terms against the current neighbor harmonics
   (`ΔE = c_a·ΔZ`, exact for any body order); β enters only in the accept step. Keywords:
   `burnin` / `thin` (sweeps), `step`, `rng`, `init`, and `randomize` (one Haar rotation
   per stored copy — for an isotropic model still exact Boltzmann with uniform absolute
   orientation, e.g. anisotropy training data). A multi-temperature call warm-starts each
   next temperature (high→low = annealing). `MCSample` carries `configs` with parallel
-  `temperature` / `energy` (that stored config's SCE energy, `j0` excluded) / `acceptance`
-  diagnostics. Design record: `docs/specs/mc-sampling.md`; guide:
+  `kT` / `temperature` [K] / `energy` (that stored config's SCE energy, `j0` excluded) /
+  `acceptance` diagnostics. Design record: `docs/specs/mc-sampling.md`; guide:
   `docs/src/guide/mc_sampling.md`. Supercell tiling and thermodynamic observables are
   explicitly deferred.
 - The `(4π)^(N/2)`-scaled term digest is factored out of `MultipoleModel(model)` into
