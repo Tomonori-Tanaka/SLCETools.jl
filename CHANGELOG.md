@@ -6,6 +6,33 @@ release, so everything lives under *Unreleased*.
 
 ## [Unreleased]
 
+### Added — Metropolis Monte-Carlo sampler (`MetropolisSampler`)
+
+- **`MetropolisSampler(model::SCEPredictor; reference = nothing)` + `sample(...) ->
+  MCSample`** (`src/mc/metropolis.jl`): single-spin Metropolis on the **joint** Boltzmann
+  distribution of the fitted SCE over its training cell — the correlated sibling of the
+  single-site mean-field `MFASampler`, behind the same `sample` verb. The control is the
+  **absolute** `temperature = k_B·T` in the model's energy units (no reduced `τ`, no `l=1`
+  Perron scale, so any body order works — including models without a bilinear channel).
+  Each attempt contracts the fitted terms against the current neighbor harmonics
+  (`ΔE = c_a·ΔZ`, exact for any body order); β enters only in the accept step. Keywords:
+  `burnin` / `thin` (sweeps), `step`, `rng`, `init`, and `randomize` (one Haar rotation
+  per stored copy — for an isotropic model still exact Boltzmann with uniform absolute
+  orientation, e.g. anisotropy training data). A multi-temperature call warm-starts each
+  next temperature (high→low = annealing). `MCSample` carries `configs` with parallel
+  `temperature` / `energy` (that stored config's SCE energy, `j0` excluded) / `acceptance`
+  diagnostics. Design record: `docs/specs/mc-sampling.md`; guide:
+  `docs/src/guide/mc_sampling.md`. Supercell tiling and thermodynamic observables are
+  explicitly deferred.
+- The `(4π)^(N/2)`-scaled term digest is factored out of `MultipoleModel(model)` into
+  `_scaled_multipole_terms` (`mfa/bridge.jl`) and shared by both consumers — still the
+  package's single scale-application site (pure refactor; the P4 suite is the gate).
+- Gates (`test/unit/test_mc_sampler.jl`): machine-precision local↔global energy
+  consistency against `predict_energy`; the exact two-spin correlation `⟨e₁·e₂⟩ = −L(βJ)`
+  (and the energy diagnostic against `J·⟨e₁·e₂⟩`); the single-site Langevin limit;
+  `randomize` isotropy invariance (energy + Gram matrix); byte-identical seeded runs;
+  guards.
+
 ### Fixed — Metropolis lobe-trapping bias (the flip proposal)
 
 - **The single-site Metropolis engine gained an antipodal-flip proposal** (`e → −e` with

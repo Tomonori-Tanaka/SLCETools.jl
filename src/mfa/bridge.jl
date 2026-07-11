@@ -51,6 +51,33 @@ function ExchangeModel(model::SCEPredictor)
     return ExchangeModel(bilinear; onsite = onsite)
 end
 
+# Digest the fitted model's multipole terms into `_MFATerm`s, applying the `(4π)^(body/2)`
+# tesseral scale (`multipole_terms` returns the raw fitted `jϕ`). This is the package's
+# single scale-application site — both the mean-field `MultipoleModel` and the Metropolis
+# `MetropolisSampler` consume it; never re-apply downstream. Returns `(terms, lmax)`.
+function _scaled_multipole_terms(model::SCEPredictor)
+    terms = _MFATerm[]
+    lmax = 0
+    for mt in multipole_terms(model)
+        # Both consumers require distinct sites per cluster: the mean-field contraction
+        # decouples every site (⟨∏Z⟩ → ∏⟨Z⟩), and the Metropolis local update relies on
+        # the site-a coefficients being independent of e_a. The cluster enumeration drops
+        # reused-atom clusters, so this holds, but assert it (a repeated site would need
+        # CG recoupling, not a self-⟨Z⟩ factor).
+        allunique(mt.atoms) || throw(ArgumentError(
+            "cluster member with a repeated atom $(mt.atoms); the per-site " *
+            "factorization assumes distinct sites"))
+        # Copy the fields out of the core's introspection view: never alias the fitted model's
+        # internal SALC arrays into a long-lived term (value semantics, no upstream mutation).
+        push!(terms, _MFATerm(mt.coef * (4π)^(mt.body / 2), copy(mt.atoms), copy(mt.ls),
+                              copy(mt.folded)))
+        lmax = max(lmax, maximum(mt.ls))
+    end
+    isempty(terms) && throw(ArgumentError(
+        "the model has no spin-dependent SALCs with a nonzero coefficient"))
+    return terms, lmax
+end
+
 """
     MultipoleModel(model::SCEPredictor) -> MultipoleModel
 
@@ -63,27 +90,9 @@ single-ion, and higher-order / many-body — and the mean field iterates the ful
 averages `⟨Z_lm⟩`.
 """
 function MultipoleModel(model::SCEPredictor)
-    n = n_atoms(model)
-    terms = _MFATerm[]
-    lmax = 0
-    for mt in multipole_terms(model)
-        # The mean-field contraction decouples every site in a cluster (⟨∏Z⟩ → ∏⟨Z⟩), which
-        # assumes distinct sites; the cluster enumeration drops reused-atom clusters, so this
-        # holds, but assert it (a repeated site would need CG recoupling, not a self-⟨Z⟩
-        # factor).
-        allunique(mt.atoms) || throw(ArgumentError(
-            "MultipoleModel: cluster member with a repeated atom $(mt.atoms); the " *
-            "mean-field factorization assumes distinct sites"))
-        # Copy the fields out of the core's introspection view: never alias the fitted model's
-        # internal SALC arrays into a long-lived term (value semantics, no upstream mutation).
-        push!(terms, _MFATerm(mt.coef * (4π)^(mt.body / 2), copy(mt.atoms), copy(mt.ls),
-                              copy(mt.folded)))
-        lmax = max(lmax, maximum(mt.ls))
-    end
-    isempty(terms) && throw(ArgumentError(
-        "the model has no spin-dependent SALCs with a nonzero coefficient"))
+    terms, lmax = _scaled_multipole_terms(model)
     bilinear, onsite, _, _ = _extract_bilinear_onsite(model)
-    return MultipoleModel(n, lmax, terms, ExchangeModel(bilinear; onsite = onsite))
+    return MultipoleModel(n_atoms(model), lmax, terms, ExchangeModel(bilinear; onsite = onsite))
 end
 
 """

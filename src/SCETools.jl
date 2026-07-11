@@ -7,8 +7,10 @@ Auxiliary tooling around the spin-cluster-expansion (SCE) fitting core
 rather than build one. The first component is the **mean-field (MFA) spin-configuration
 sampler** — draw physically representative finite-temperature spin configurations from the
 single-site mean field of a fitted model (or a hand-built exchange model) at a controlled
-reduced temperature `τ = T/T_MF`. Future components (active learning, configuration /
-diagnostic helpers) live alongside it.
+reduced temperature `τ = T/T_MF`. Its joint-Boltzmann sibling is the **Metropolis
+Monte-Carlo sampler** (`MetropolisSampler`) — correlated configurations at an absolute
+temperature `k_B·T`. Future components (active learning, configuration / diagnostic
+helpers) live alongside them.
 
 The package reads the fitted Hamiltonian only through `SCEFitting`'s public
 introspection surface (`multipole_terms`, `bilinear_terms`, and the tesseral-harmonic
@@ -36,7 +38,8 @@ using SCEFitting: SCEPredictor, n_atoms, multipole_terms, MultipoleTerm, bilinea
 # pure on-sphere math; the parent re-binds the names the rest of the package uses (the
 # `_`-prefixed ones are engine internals, imported here by explicit qualification).
 include("mfa/engine.jl")
-using .MeanFieldEngine: _random_unit, _field_lmax, _l1_field, site_potential, sample_vmf,
+using .MeanFieldEngine: _random_unit, _field_lmax, _l1_field, _rotate,
+    _METROPOLIS_FLIP_FRACTION, site_potential, sample_vmf,
     sample_vmf_field, sample_site_metropolis, SphereQuadrature, sphere_quadrature,
     field_scale, multipole_average
 # types (carriers + sampler) → ExchangeModel construction → the τ self-consistency solvers →
@@ -46,6 +49,12 @@ include("mfa/exchange.jl")
 include("mfa/selfconsistency.jl")
 include("mfa/sampler.jl")
 include("mfa/bridge.jl")
+
+# --- Metropolis Monte-Carlo sampling (docs/specs/mc-sampling.md) ---
+# The joint-Boltzmann sibling of the mean-field sampler: single-spin Metropolis on the
+# training cell at an absolute temperature, reusing the mean-field term digest and the
+# engine's proposal primitives. Kept in its own directory as a future extraction seam.
+include("mc/metropolis.jl")
 
 # The VASP adapter (`SCETools.VASP`): OSZICAR/POSCAR reading into `SpinDatum`s and
 # constrained-noncollinear INCAR / input-set writing. Namespaced as a submodule, so it
@@ -63,8 +72,9 @@ include("viz/serialize.jl")
 # The mean-field sampling workflow a user reaches for. The coupling-model digest, the engine
 # primitives, and the viz render plumbing are *public but unexported* — see the block below.
 
-# the sampler, the carrier the user hand-builds, and the `sample` verb
+# the samplers, the carrier the user hand-builds, and the `sample` verb
 export AbstractSampler, MFASampler, MFASample, ExchangeModel, sample
+export MetropolisSampler, MCSample
 # reduced-temperature ↔ magnetization helpers
 export mfa_temperature_scale, mfa_sublattice_m, thermal_averaged_m, tau_from_magnetization
 # per-atom MFA distribution export (the viz output a user calls)

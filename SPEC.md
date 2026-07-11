@@ -34,6 +34,11 @@ src/mfa/
   selfconsistency.jl         # the Langevin closed forms + the three mean-field solvers (P2/P3/P4)
   sampler.jl                 # the MFASampler constructors + the `sample` verb + dispatch
   bridge.jl                  # ExchangeModel / MultipoleModel / MFASampler from a fitted SCEPredictor
+                             #   (+ `_scaled_multipole_terms`, the package's single (4π)^(N/2) site)
+src/mc/
+  metropolis.jl              # MetropolisSampler / MCSample: single-spin Metropolis on the joint
+                             #   Boltzmann distribution of the fitted SCE (training cell, absolute
+                             #   k_B·T) — its own directory as a future extraction seam
 src/io/
   vasp.jl                    # module SCETools.VASP: the VASP adapter — read (read_poscar /
                              #   Oszicar) + write (write_poscar / write_incar / write_inputs)
@@ -56,7 +61,8 @@ The export surface is tiered (mirroring `SCEFitting`): a lean exported workflow 
 *public but unexported* tier reached by qualification (`SCETools.<name>`), declared with
 the Julia `public` keyword so the tier is machine-checkable (`Base.ispublic`, Aqua).
 
-- **Exported** — `AbstractSampler`, `MFASampler`, `MFASample`, `ExchangeModel`, `sample`;
+- **Exported** — `AbstractSampler`, `MFASampler`, `MFASample`, `MetropolisSampler`,
+  `MCSample`, `ExchangeModel`, `sample`;
   the helpers `mfa_temperature_scale`, `mfa_sublattice_m`, `thermal_averaged_m`,
   `tau_from_magnetization`; and the viz output `SiteDistributionField`,
   `mfa_site_coefficients`, `write_mfa_distributions`.
@@ -75,6 +81,13 @@ of `nsamples`.
 Construction fidelity ladder: `MFASampler(reference)` (single global isotropic) →
 `MFASampler(ExchangeModel(...); reference)` (multi-sublattice isotropic / tensorial) →
 `MFASampler(model::SCEPredictor; reference)` (full multipole, all clusters and `l`).
+
+`MetropolisSampler(model::SCEPredictor; reference = nothing)` is the joint-Boltzmann
+sibling behind the same `sample` verb: single-spin Metropolis on the training cell at an
+**absolute** `temperature = k_B·T` (model energy units — no `τ`, no `l=1` Perron scale,
+so any body order works) → `MCSample` (configs + parallel `temperature` / `energy` /
+`acceptance`). Scope is configuration sampling only; supercell tiling and thermodynamic
+observables (`m(T)`, `T_c`) are explicitly deferred — see `docs/specs/mc-sampling.md`.
 
 ## Public API (VASP I/O — `SCETools.VASP`)
 

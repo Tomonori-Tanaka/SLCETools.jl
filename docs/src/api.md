@@ -8,8 +8,10 @@ CurrentModule = SCETools
 SCETools
 ```
 
-Every public type and function. The headline workflow is `MFASampler(model; reference)`
-→ [`sample`](@ref) → [`MFASample`](@ref); see [Sampling](guide/sampling.md) and
+Every public type and function. The headline workflows are `MFASampler(model; reference)`
+→ [`sample`](@ref) → [`MFASample`](@ref) (mean field) and `MetropolisSampler(model)` →
+[`sample`](@ref) → [`MCSample`](@ref) (Metropolis MC); see [Sampling](guide/sampling.md),
+[Monte-Carlo sampling](guide/mc_sampling.md), and
 [Exchange models](guide/exchange_models.md) for the constructions and helpers (some
 docstrings are shown on those pages and indexed below).
 
@@ -32,6 +34,8 @@ AbstractSampler
 MFASampler
 sample
 MFASample
+MetropolisSampler
+MCSample
 ```
 
 ## Carriers and helpers

@@ -11,8 +11,11 @@ Auxiliary tooling around the SCE fitting core
 `SCEPredictor` rather than build one. The first component is the **mean-field (MFA)
 spin-configuration sampler** — draw physically representative finite-temperature spin
 configurations from the single-site mean field of a fitted model (or a hand-built
-exchange model) at a controlled reduced temperature `τ = T/T_MF`. Future components
-(active learning, configuration / diagnostic helpers) live alongside it. Priority:
+exchange model) at a controlled reduced temperature `τ = T/T_MF`. Its joint-Boltzmann
+sibling is the **Metropolis MC sampler** (`src/mc/metropolis.jl`, `MetropolisSampler`):
+correlated configurations on the training cell at an **absolute** `k_B·T` (model energy
+units — deliberately *not* `τ`; the model need not have a bilinear channel). Future
+components (active learning, configuration / diagnostic helpers) live alongside. Priority:
 numerical correctness and reproducibility, and the same physical conventions as the
 core (this package never re-derives them — it reads the fitted Hamiltonian through the
 core's public surface).
@@ -32,7 +35,9 @@ Inherited from the core (`SCEFitting`'s `CLAUDE.md`); the ones this package lean
   columns atoms). The `reference` is the same layout.
 - **Real (tesseral) spherical harmonics `Zₗₘ`**, per-site factor `(4π)^(−1/2)`; an N-body
   SCE term carries `(4π)^(N/2)`. `multipole_terms` returns the **raw** fitted `jϕ`; this
-  package applies the `(4π)^(body/2)` scale once, in `MultipoleModel(model)` (`mfa/bridge.jl`).
+  package applies the `(4π)^(body/2)` scale once, in `_scaled_multipole_terms`
+  (`mfa/bridge.jl`), shared by `MultipoleModel` and `MetropolisSampler` — never re-apply
+  downstream.
 - **Reduced temperature `τ = T/T_MF`** with `T_MF = ρ/3` from the `l=1` (bilinear) Perron
   eigenvalue `ρ`, `β = 3/(ρτ)`. Scale invariance: only coupling *ratios* matter.
 - **Mean-field decoupling** `⟨∏ Z⟩ → ∏⟨Z⟩` (assumes distinct sites per cluster — asserted).
@@ -42,13 +47,23 @@ Inherited from the core (`SCEFitting`'s `CLAUDE.md`); the ones this package lean
 ## Coupled ("linked") code sites — change one, check all
 
 - **`mfa/bridge.jl` ↔ the core's introspection contract** (`SCEFitting`'s
-  `sce/introspect.jl`): `MultipoleModel(model)` consumes `multipole_terms` and applies
-  `coef·(4π)^(body/2)`; `ExchangeModel(model)` consumes `bilinear_terms` (the `3×3`
+  `sce/introspect.jl`): `_scaled_multipole_terms` consumes `multipole_terms` and applies
+  `coef·(4π)^(body/2)` (feeding both `MultipoleModel(model)` and
+  `MetropolisSampler(model)`); `ExchangeModel(model)` consumes `bilinear_terms` (the `3×3`
   bilinear / single-ion matrices). If a `MultipoleTerm` field or the scale convention
-  changes upstream, this file moves with it. The regression gate is the P1–P4 suite
-  (`test/unit/test_{multipole,tensorial,exchange}.jl`): exact reduction to the
-  single-global Langevin curve, scale invariance, and the many-body factorization check
-  `V_a/β = ⟨E | e_a⟩` to machine precision.
+  changes upstream, this file and `mc/metropolis.jl` move with it. The regression gates
+  are the P1–P4 suite (`test/unit/test_{multipole,tensorial,exchange}.jl`: exact
+  reduction to the single-global Langevin curve, scale invariance, the many-body
+  factorization `V_a/β = ⟨E | e_a⟩` to machine precision) and the MC suite
+  (`test/unit/test_mc_sampler.jl`: `ΔE = c_a·ΔZ` ≡ the `predict_energy` difference to
+  machine precision, the exact two-spin `⟨e₁·e₂⟩ = −L(βJ)`).
+- **`mc/metropolis.jl` ↔ the mean-field kernels**: `_accumulate_site_term!` /
+  `_term_energy` are the single-site / full-contraction siblings of
+  `selfconsistency.jl`'s `_accumulate_term!` (same `μ = idx − l − 1` mapping and
+  rank-specialized barrier, concrete `Z(e_b)` instead of `⟨Z⟩`), and the sweep reuses
+  the engine's proposal (`_rotate` + `_METROPOLIS_FLIP_FRACTION`) and the MFA sampler's
+  `_random_rotation` / `_normalize_reference`. Change one side and re-check the
+  machine-precision local↔global gate in `test_mc_sampler.jl`.
 - **`mfa/engine.jl` (`MeanFieldEngine`) ↔ `SCEFitting.Harmonics`** (`Zlm`, `lm_index`): the
   engine primitives (`site_potential`, the vMF / Metropolis draws, the quadrature) evaluate
   tesseral harmonics through the core submodule (bound here by `import SCEFitting.Harmonics`,

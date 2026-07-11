@@ -11,13 +11,15 @@ const _I3 = SMatrix{3,3,Float64}(I)
 """
     AbstractSampler
 
-Dispatch seam for spin-configuration samplers. [`MFASampler`](@ref) (mean-field) is the
-first; future Metropolis-MC / spin-spiral samplers can slot in behind the `sample` verb.
+Dispatch seam for spin-configuration samplers: [`MFASampler`](@ref) (mean-field,
+single-site) and [`MetropolisSampler`](@ref) (Metropolis MC, joint Boltzmann); future
+spin-spiral samplers can slot in behind the `sample` verb.
 
-The interface a subtype implements:
-`sample(s, n; tau, rng, ...) -> MFASample` (configurations in the `3 × n_atoms`
-unit-column layout, with parallel `tau` / `m` labels) and, where a temperature scale
-is meaningful, `mfa_temperature_scale(s)`.
+The interface a subtype implements: `sample(s, n; <control>, rng, ...)` returning a
+labeled result ([`MFASample`](@ref) / [`MCSample`](@ref) — configurations in the
+`3 × n_atoms` unit-column layout with parallel per-config labels). The control variable
+is sampler-specific (the reduced `tau`/`m` for the mean field, the absolute
+`temperature` for the MC), as is, where meaningful, `mfa_temperature_scale(s)`.
 """
 abstract type AbstractSampler end
 

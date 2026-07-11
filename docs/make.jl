@@ -22,6 +22,7 @@ makedocs(;
         "Getting started" => "getting_started.md",
         "Guide" => [
             "guide/sampling.md",
+            "guide/mc_sampling.md",
             "guide/exchange_models.md",
             "guide/vasp.md",
             "guide/distributions.md",
