@@ -10,6 +10,14 @@ training cell, so the drawn configurations carry the model's true inter-site
 correlations. The price is a Markov chain — burn-in, thinning, and an acceptance rate to
 watch — instead of closed-form single-site draws.
 
+![Two coupled spins: MC reproduces the exact pair correlation, while the mean field
+factorizes it and shows a spurious transition at T_MF](../assets/mc_dimer_correlation.svg)
+
+*Two exchange-coupled spins (the test suite's dimer): the MC estimate sits on the exact
+`⟨e₁·e₂⟩ = L(β|J|)` at every temperature, while the single-site mean field factorizes the
+correlation into `m²` and produces a spurious sharp transition at `T_MF` — the
+correlation the MC sampler exists to keep.*
+
 ## Construction and the `sample` verb
 
 ```julia
@@ -33,6 +41,14 @@ In the collection form the chain state **carries over** between consecutive temp
 (with a fresh burn-in at each), so ordering high → low is an annealing run — useful for
 reaching low-temperature order from a random start. Call once per temperature for
 independent chains.
+
+![An annealing sweep: the energy trace steps down block by block toward the aligned
+ground state while the acceptance rate falls](../assets/mc_annealing.svg)
+
+*A warm-started ladder on a small ferromagnet, from a random start: within each
+temperature block the energy fluctuates about its equilibrium level (black: block mean),
+stepping toward the aligned ground state `E₀` as the ladder cools; the acceptance rate
+(bottom) falls with temperature — the signal for lowering `step`.*
 
 | Keyword | Meaning |
 |---|---|
@@ -71,6 +87,13 @@ Local single-spin updates diffuse the configuration's *absolute* orientation ver
 near ``+z`` for a long time even when the physics says all orientations are equivalent.
 `randomize = true` applies one Haar-uniform global rotation to each **stored copy** (the
 chain itself is untouched):
+
+![Without randomize the configuration's mean axis stays pinned at the starting
+orientation; with randomize it is Haar-uniform](../assets/mc_randomize.svg)
+
+*A 64-site ferromagnet at low temperature, started along `+z`: over the whole run the
+chain's mean axis barely leaves `ẑ` (blue), while the `randomize`d stored copies cover
+all orientations uniformly (green) — same chain, same seed.*
 
 - **isotropic model** — the rotated configurations are still exact Boltzmann samples
   (the energy is invariant; `.energy` is recomputed on the stored copy and machine-equal),
