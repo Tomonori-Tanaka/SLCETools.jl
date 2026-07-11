@@ -73,6 +73,60 @@ One sweep is `n_atoms` single-spin attempts; each attempt contracts the fitted t
 against the current neighbor harmonics, so the acceptance uses the *exact* energy change
 of the move (any body order, no linearization).
 
+### Every keyword, spelled out
+
+The single-temperature form — production sampling at one physical temperature, e.g.
+generating anisotropy training configurations from an isotropic fit:
+
+```julia
+using SCETools, Random, Statistics
+
+reference = ...                        # 3 × n_atoms unit columns (the ground state)
+mc = MetropolisSampler(model; reference = reference)
+
+samp = sample(mc, 500;                 # store 500 configurations, then stop
+    temperature = 300,                 # 300 K — or kT = 0.0259 [eV]; exactly one
+    burnin      = 500,                 # sweeps discarded first (equilibration);
+                                       #   more when starting far from equilibrium
+    thin        = 20,                  # sweeps between stored configs; raise it
+                                       #   if successive configs still look alike
+    step        = 0.3,                 # proposal angle [rad]; lower at low T to
+                                       #   keep the acceptance in the healthy band
+    rng         = MersenneTwister(1),  # seeded ⇒ byte-reproducible run
+    init        = nothing,             # nothing → the sampler's reference here;
+                                       #   pass a 3 × n_atoms matrix to override
+    randomize   = true)                # Haar-rotate each *stored* copy: uniform
+                                       #   orientation; isotropic ⇒ still Boltzmann
+
+# always look at the diagnostics before trusting the configs:
+mean(samp.acceptance)                  # aim for ~0.2–0.6; too low → reduce `step`
+samp.energy                            # trend-free? a drift = `burnin` too short
+```
+
+The sweep form — an annealing ladder from a random start down to the target temperature
+(one call, the chain warm-starts each next value):
+
+```julia
+mc_hot = MetropolisSampler(model)         # no reference → chains start random
+
+samp = sample(mc_hot;
+    temperature = [1200, 900, 600, 300],  # kelvin ladder, high → low = annealing
+                                          #   (or kT = [...] in eV — never both)
+    nsamples    = 100,                    # stored configs *per* temperature
+                                          #   (4 × 100 total, ordered value-outer)
+    burnin      = 300,                    # re-equilibration after *each* T step
+    thin        = 10,
+    step        = 0.6,
+    rng         = MersenneTwister(2),
+    init        = nothing,                # no reference on mc_hot → random start
+                                          #   (hot — matches the 1200 K ladder head)
+    randomize   = false)                  # fixed frame, e.g. to watch the ordering
+                                          #   axis develop during the anneal
+
+# pick out one temperature block by its label:
+configs_300K = [c for (c, T) in zip(samp.configs, samp.temperature) if T == 300]
+```
+
 ## The `MCSample` output
 
 [`MCSample`](@ref) mirrors the [`MFASample`](@ref) interface (iterate / index as the
