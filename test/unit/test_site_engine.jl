@@ -74,6 +74,13 @@ end
         @test fine ≈ target atol = 1e-4
         # malformed (non-square) fields are rejected
         @test_throws ArgumentError MR.multipole_average([1.0, 2.0, 3.0], 1)
+        # the memoizing (cache) variant is bit-identical to the two-arg form — the
+        # cached quadrature is a pure function of the auto-selected node count
+        cache = Dict{Int,MR.SphereQuadrature}()
+        @test MR.multipole_average(cache, c, 1) == MR.multipole_average(c, 1)
+        @test MR.multipole_average(cache, c, 1) == MR.multipole_average(c, 1)  # cache hit
+        @test length(cache) == 1
+        @test_throws ArgumentError MR.multipole_average(cache, [1.0, 2.0, 3.0], 1)
     end
 
     @testset "general engine on a non-vMF (l=2 Bingham) field: Metropolis ↔ quadrature" begin

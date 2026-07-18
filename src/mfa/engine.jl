@@ -281,13 +281,19 @@ concentration `κ`) adds the resolution a sharply peaked field needs. Pass expli
 `ntheta`/`nphi` to override. Use `multipole_average(c, lmax)` to have the size chosen from
 `c` automatically.
 """
+# The auto-selected per-angle node count — the single definition shared by
+# `sphere_quadrature` and the memoizing `multipole_average` (whose cache is keyed on it).
+# Cap: beyond ~this concentration the integrand is essentially a delta and ⟨Z_lm⟩ → its
+# value at the peak, so a finer grid buys nothing but cost — and an uncapped
+# `base ∝ concentration` would explode (base² nodes) for the large molecular fields of
+# the τ → 0 limit.
+_quadrature_size(lmax::Integer, concentration::Real)::Int =
+    min(2 * Int(lmax) + 6 + ceil(Int, max(0.0, Float64(concentration))), 256)
+
 function sphere_quadrature(lmax::Integer; concentration::Real = 0.0,
                            ntheta::Integer = 0, nphi::Integer = 0)::SphereQuadrature
-    # Cap the auto-sized node count: beyond ~this concentration the integrand is essentially
-    # a delta and ⟨Z_lm⟩ → its value at the peak, so a finer grid buys nothing but cost — and
-    # an uncapped `base ∝ concentration` would explode (base² nodes) for the large molecular
-    # fields of the τ → 0 limit. An explicit `ntheta`/`nphi` is honored uncapped.
-    base = min(2 * Int(lmax) + 6 + ceil(Int, max(0.0, Float64(concentration))), 256)
+    # An explicit `ntheta`/`nphi` is honored uncapped.
+    base = _quadrature_size(lmax, concentration)
     nt = ntheta > 0 ? Int(ntheta) : base
     np = nphi > 0 ? Int(nphi) : base
     z, wz = _gauss_legendre(nt)
@@ -323,6 +329,19 @@ but size it adequately for the field).
 function multipole_average(c::AbstractVector{<:Real}, lmax::Integer)::Vector{Float64}
     _field_lmax(c)
     return multipole_average(sphere_quadrature(lmax; concentration = field_scale(c)), c, lmax)
+end
+
+# Memoizing variant for iteration loops (Anderson self-consistency): the auto-sized
+# quadrature is a pure function of the node count `_quadrature_size(lmax, field_scale(c))`,
+# so caching by that key returns bit-identical nodes — same results as the 2-arg form,
+# minus the repeated Gauss–Legendre solves. The cache is caller-owned (no global state);
+# key on the size alone (the node layout does not depend on `lmax` otherwise).
+function multipole_average(cache::AbstractDict{Int,SphereQuadrature},
+                           c::AbstractVector{<:Real}, lmax::Integer)::Vector{Float64}
+    _field_lmax(c)
+    base = _quadrature_size(lmax, field_scale(c))
+    q = get!(() -> sphere_quadrature(lmax; ntheta = base, nphi = base), cache, base)
+    return multipole_average(q, c, lmax)
 end
 
 function multipole_average(q::SphereQuadrature, c::AbstractVector{<:Real},

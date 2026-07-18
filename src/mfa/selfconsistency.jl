@@ -195,11 +195,15 @@ function _tensor_state(exch::ExchangeModel, ehat::Vector{SVector{3,Float64}}, ρ
         end
         return cs, m
     end
+    # quadrature memo: the Anderson loop re-averages every atom each iteration, and the
+    # auto-sized grid repeats a handful of node counts — reuse instead of re-solving
+    # Gauss–Legendre per call (bit-identical results; see `multipole_average`)
+    qcache = Dict{Int,SphereQuadrature}()
     G!(out, m) = begin
         @inbounds for a = 1:n
             g = _molecular_field(exch, ehat, m, a)
             c = _site_coeffs(g, exch.onsite[a], β)
-            avg = multipole_average(c, 2)
+            avg = multipole_average(qcache, c, 2)
             emean = (4π / 3) * _l1_field(avg)         # ⟨e⟩ from ⟨Z_1m⟩
             out[a] = clamp(dot(emean, ehat[a]), -1.0, 1.0)
         end
@@ -296,13 +300,15 @@ function _multipole_state(mf::MultipoleModel, ehat::Vector{SVector{3,Float64}}, 
     end
     Zavg = [copy(Zref[a]) for a = 1:n]
     flat0 = reduce(vcat, Zref)
+    # quadrature memo across Anderson iterations — see `_tensor_state`
+    qcache = Dict{Int,SphereQuadrature}()
     G! = (out, x) -> begin
         @inbounds for a = 1:n, j = 1:nlm
             Zavg[a][j] = x[(a - 1) * nlm + j]
         end
         _site_coeffs_all!(cs, mf.terms, Zavg, β, n)
         @inbounds for a = 1:n
-            avg = multipole_average(cs[a], lmax)
+            avg = multipole_average(qcache, cs[a], lmax)
             for j = 1:nlm
                 out[(a - 1) * nlm + j] = avg[j]
             end

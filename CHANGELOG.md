@@ -6,6 +6,19 @@ release, so everything lives under *Unreleased*.
 
 ## [Unreleased]
 
+### Changed — quadrature memoization in the Anderson self-consistency
+
+- The tensorial and full-multipole self-consistency loops
+  (`_tensor_state`/`_multipole_state`) no longer rebuild a `SphereQuadrature`
+  (Gauss–Legendre solve included) per atom per Anderson iteration: a new
+  memoizing `multipole_average(cache::AbstractDict{Int,SphereQuadrature}, c,
+  lmax)` method reuses grids keyed on the auto-selected node count
+  (`_quadrature_size`, now the single size definition). The cached grid is a
+  pure function of that key, so results are **bit-identical** to the two-arg
+  form (pinned by a unit test); the caches are caller-owned locals — no global
+  state. Sampling near critical slowing speeds up ~1.2–1.7× on the bench
+  fixture.
+
 ### Fixed — review-pass hardening (whole-package review, 2026-07-18)
 
 - `MetropolisSampler`'s rotation proposal now projects the rotated spin back
