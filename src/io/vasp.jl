@@ -468,11 +468,13 @@ The MAGMOM / M_CONSTR atom order must match the POSCAR. Returns `path`.
 function write_incar(path::AbstractString, directions::AbstractMatrix{<:Real};
                      magmoms = nothing, base = nothing, constrain::Bool = true,
                      saxis = nothing, i_constrained_m::Integer = 1, lambda::Real = 1.0,
-                     extra = Pair[], _species = nothing, _labels = nothing)
+                     extra = Pair[])
     n = size(directions, 2)
     kept, tmpl_mag, has_icm, tmpl_saxis =
         base === nothing ? (String[], nothing, false, nothing) : _process_template(base)
-    mags = _resolve_magmoms(magmoms, n, _species, _labels, tmpl_mag)
+    # no species context here: a per-species magmom Dict needs the crystal and is
+    # resolved by `write_inputs`; passing one directly errors with a clear message
+    mags = _resolve_magmoms(magmoms, n, nothing, nothing, tmpl_mag)
 
     # The frame the moments are written in must match the SAXIS the INCAR declares. Prefer an
     # explicit kwarg, else the template's SAXIS, else the global frame; warn if both are given

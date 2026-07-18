@@ -67,7 +67,8 @@ the Julia `public` keyword so the tier is machine-checkable (`Base.ispublic`, Aq
   `tau_from_magnetization`; and the viz output `SiteDistributionField`,
   `mfa_site_coefficients`, `write_mfa_distributions`.
 - **Public, unexported** (`public`) — `MultipoleModel` (the full-multipole digest; usually
-  built via `MFASampler(model)`); the viz plumbing `SphereGrid` / `fibonacci_sphere` /
+  built via `MFASampler(model)`); `KB_EV` (the Boltzmann constant in eV/K used by the
+  kelvin↔kT conversion); the viz plumbing `SphereGrid` / `fibonacci_sphere` /
   `harmonic_basis` / `site_probabilities`; and the submodules `MeanFieldEngine` (engine
   primitives: `site_potential`, `sample_vmf`, `sample_vmf_field`, `sample_site_metropolis`,
   `SphereQuadrature`, `sphere_quadrature`, `field_scale`, `multipole_average`) and `VASP`.

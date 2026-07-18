@@ -39,7 +39,9 @@ end
         mf1 = MultipoleModel(_dimer_model())
         @test mf1.natoms == 4
         @test mf1.lmax == 1
-        @test length(mf1.terms) == 2                   # both directed members of the 1–2 bond
+        # one canonical member per physical bond (SCEFitting v4 canonical members,
+        # both directed contributions pre-summed into its folded tensor)
+        @test length(mf1.terms) == 1
         mf2 = MultipoleModel(_biquadratic_model(0))
         @test mf2.lmax == 2                             # the [2,2] biquadratic channel
         @test length(mf2.terms) > length(mf1.terms)

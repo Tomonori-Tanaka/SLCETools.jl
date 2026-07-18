@@ -44,13 +44,15 @@ _mc_rand_config(rng, n) = reduce(hcat, [Vector(MR._random_unit(rng)) for _ = 1:n
         @test s isa AbstractSampler
         @test s.natoms == 4
         @test s.lmax == 1
-        @test length(s.terms) == 2                    # both directed members of the 1–2 bond
-        @test s.terms_of[1] == [1, 2] || length(s.terms_of[1]) == 2
+        # one canonical member per physical bond (SCEFitting v4 canonical members);
+        # both bond sites reference that single term
+        @test length(s.terms) == 1
+        @test s.terms_of[1] == [1] && s.terms_of[2] == [1]
         @test isempty(s.terms_of[3])                  # free spin: no terms
         @test s.reference === nothing
         sr = MetropolisSampler(_mc_dimer_model(); reference = Float64[0 0 0 0; 0 0 0 0; 2 2 2 2])
         @test sr.reference ≈ Float64[0 0 0 0; 0 0 0 0; 1 1 1 1]   # normalized
-        @test sprint(show, s) == "MetropolisSampler(4 atoms, lmax=1, 2 terms)"
+        @test sprint(show, s) == "MetropolisSampler(4 atoms, lmax=1, 1 terms)"
     end
 
     @testset "local update ↔ global energy, machine precision" begin

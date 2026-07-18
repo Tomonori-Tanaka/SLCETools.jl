@@ -6,6 +6,26 @@ release, so everything lives under *Unreleased*.
 
 ## [Unreleased]
 
+### Fixed — review-pass hardening (whole-package review, 2026-07-18)
+
+- `MetropolisSampler`'s rotation proposal now projects the rotated spin back
+  onto the unit sphere each move: compounded Rodrigues rotations previously
+  random-walked the column norm off unity (~ε·√n_accepted — harmless except in
+  very long chains). Statistically invisible; the antipodal-flip branch was
+  already exact. Sampled streams shift at machine epsilon relative to earlier
+  runs.
+- `write_incar`: removed the never-wired `_species`/`_labels` keywords — a
+  per-species magmom `Dict` needs the crystal and is resolved by
+  `write_inputs`, as the error message already directed. No caller change.
+- `SPEC.md`: added the missing `KB_EV` to the public-unexported tier;
+  documented the `ExchangeModel`-skips vs `MultipoleModel`-errors asymmetry
+  for (unreachable today) repeated-atom self-bonds in `bridge.jl`.
+- Tests synced to SCEFitting's canonical (v4) SALC members: `multipole_terms`
+  now emits **one** member per physical bond (both directed contributions
+  pre-summed), so the dimer fixtures expect 1 term instead of 2. The
+  machine-precision energy gates were already passing — the numerics were
+  never affected, only the term-count expectations.
+
 ### Added — Metropolis Monte-Carlo sampler (`MetropolisSampler`)
 
 - **`MetropolisSampler(model::SCEPredictor; reference = nothing)` + `sample(...) ->

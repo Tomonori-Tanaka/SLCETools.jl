@@ -232,7 +232,11 @@ function _mc_sweep!(rng::AbstractRNG, config::Matrix{Float64},
         e2 = if rand(rng) < _METROPOLIS_FLIP_FRACTION
             -e
         else
-            _rotate(e, _random_unit(rng), step * randn(rng))
+            # project back onto the sphere: compounded Rodrigues rotations would
+            # otherwise random-walk the column norm off unity over very long chains
+            # (~ε·√n_accepted); the flip branch is exact and needs no correction
+            er = _rotate(e, _random_unit(rng), step * randn(rng))
+            er / norm(er)
         end
         _zlm_row!(Znew, e2, s.lmax)
         Za = Zcur[a]

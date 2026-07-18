@@ -9,6 +9,11 @@
 # (a == image-of-a) bilinear terms, which the rigid-axis mean field does not represent (only
 # reachable via AllImages); `nskipped` counts the higher-order / higher-`l` SALCs that are
 # not bilinear (kept instead by the full `MultipoleModel` path).
+# NOTE(asymmetry): the same repeated-atom cluster makes `MultipoleModel` /
+# `MetropolisSampler` hard-error (`allunique` invariant in `_scaled_multipole_terms`)
+# where this path skips with a warning. Unreachable today (MinimumImage never emits
+# repeated-atom clusters); if AllImages lands upstream, decide then whether the
+# multipole path should degrade gracefully like this one.
 function _extract_bilinear_onsite(model::SCEPredictor)
     terms = bilinear_terms(model)
     n = n_atoms(model)
