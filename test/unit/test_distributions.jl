@@ -5,15 +5,15 @@
 # tensorial (Bingham) path, and the JSON document shape / round-trip.
 
 using Test
-using SCEFitting
-using SCETools
+using SLCE
+using SLCETools
 import JSON
-using SCETools: fibonacci_sphere, harmonic_basis, site_probabilities   # public, unexported
-using SCETools.VASP: read_poscar
+using SLCETools: fibonacci_sphere, harmonic_basis, site_probabilities   # public, unexported
+using SLCETools.VASP: read_poscar
 using LinearAlgebra
 using StaticArrays
 
-const MV = SCETools
+const MV = SLCETools
 
 # A 2-atom Fe POSCAR matching the (1,2) sublattice samplers below.
 function _fe2_crystal()

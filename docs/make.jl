@@ -1,12 +1,12 @@
-using SCETools
-using SCEFitting   # the SCE fitting core, for the executed `@example` model builds
+using SLCETools
+using SLCE   # the SCE fitting core, for the executed `@example` model builds
 using Documenter
 
-DocMeta.setdocmeta!(SCETools, :DocTestSetup, :(using SCETools); recursive = true)
+DocMeta.setdocmeta!(SLCETools, :DocTestSetup, :(using SLCETools); recursive = true)
 
 makedocs(;
-    sitename = "SCETools.jl",
-    modules = [SCETools],
+    sitename = "SLCETools.jl",
+    modules = [SLCETools],
     # Local-only build: there is no published remote yet, so do not try to resolve
     # "edit on GitHub" / source links. Add a `repolink`/`deploydocs` when a remote exists.
     remotes = nothing,

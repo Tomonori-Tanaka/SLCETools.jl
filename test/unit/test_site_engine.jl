@@ -5,13 +5,13 @@
 # the deterministic quadrature on a non-vMF (l=2 Bingham) field.
 
 using Test
-using SCEFitting
-using SCETools
+using SLCE
+using SLCETools
 using LinearAlgebra
 using Random
 using StaticArrays
 
-const MR = SCETools
+const MR = SLCETools
 
 _langevin(κ) = coth(κ) - 1 / κ                 # ⟨cosθ⟩ for vMF concentration κ
 _ez(v) = v[3]

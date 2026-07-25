@@ -1,27 +1,27 @@
-# SPEC — SCETools.jl
+# SPEC — SLCETools.jl
 
-Auxiliary tooling around the SCE fitting core `SCEFitting.jl`. Components **consume** a
-fitted `SCEPredictor` (or a hand-built exchange model); they never build or fit one. This file
+Auxiliary tooling around the SCE fitting core `SLCE.jl`. Components **consume** a
+fitted `SLCEModel` (or a hand-built exchange model); they never build or fit one. This file
 records the realized architecture and the planned active-learning layer.
 
 ## Dependency boundary
 
-`SCETools` depends on `SCEFitting` and reads a fitted model **only** through its public
+`SLCETools` depends on `SLCE` and reads a fitted model **only** through its public
 surface:
 
 - `multipole_terms(model) :: Vector{MultipoleTerm}` — the flat, code-neutral per-term view
   (raw `jϕ` coefficient, `body`, `atoms`, `shifts`, `ls`, `folded`).
 - `bilinear_terms(model) :: (; pairs, onsites, skipped)` — the bilinear (`ls=[1,1]`) /
   single-ion (`ls=[2]`) channels as Cartesian `3×3` matrices.
-- `n_atoms(model)` and the tesseral submodule `SCEFitting.Harmonics` (`Zlm`, `lm_index`).
+- `n_atoms(model)` and the tesseral submodule `SLCE.Harmonics` (`Zlm`, `lm_index`).
 
 It never touches the SALC-basis internals (`model.basis.salc_basis.salcs`, `SALCMember`,
-`SALCTerm`). The development dependency is a path-dev (`Pkg.develop(path="../SCEFitting.jl")`).
+`SALCTerm`). The development dependency is a path-dev (`Pkg.develop(path="../SLCE.jl")`).
 
 ## Module layout
 
 ```
-src/SCETools.jl              # module: imports + includes + the two export tiers
+src/SLCETools.jl              # module: imports + includes + the two export tiers
 src/mfa/
   engine.jl                  # module MeanFieldEngine: single-site potential, vMF / Metropolis
                              #   draws, sphere quadrature — pure on-sphere math, no SCE coupling;
@@ -33,14 +33,14 @@ src/mfa/
   exchange.jl                # ExchangeModel construction + the longitudinal molecular-field analysis
   selfconsistency.jl         # the Langevin closed forms + the three mean-field solvers (P2/P3/P4)
   sampler.jl                 # the MFASampler constructors + the `sample` verb + dispatch
-  bridge.jl                  # ExchangeModel / MultipoleModel / MFASampler from a fitted SCEPredictor
+  bridge.jl                  # ExchangeModel / MultipoleModel / MFASampler from a fitted SLCEModel
                              #   (+ `_scaled_multipole_terms`, the package's single (4π)^(N/2) site)
 src/mc/
   metropolis.jl              # MetropolisSampler / MCSample: single-spin Metropolis on the joint
                              #   Boltzmann distribution of the fitted SCE (training cell, absolute
                              #   k_B·T) — its own directory as a future extraction seam
 src/io/
-  vasp.jl                    # module SCETools.VASP: the VASP adapter — read (read_poscar /
+  vasp.jl                    # module SLCETools.VASP: the VASP adapter — read (read_poscar /
                              #   Oszicar) + write (write_poscar / write_incar / write_inputs)
 src/viz/
   grid.jl                    # the shared Fibonacci render grid + the tesseral basis matrix Z
@@ -57,8 +57,8 @@ POSCAR / OSZICAR parsers bit-for-bit against Magesty; run with
 
 ## Public API (sampling)
 
-The export surface is tiered (mirroring `SCEFitting`): a lean exported workflow plus a
-*public but unexported* tier reached by qualification (`SCETools.<name>`), declared with
+The export surface is tiered (mirroring `SLCE`): a lean exported workflow plus a
+*public but unexported* tier reached by qualification (`SLCETools.<name>`), declared with
 the Julia `public` keyword so the tier is machine-checkable (`Base.ispublic`, Aqua).
 
 - **Exported** — `AbstractSampler`, `MFASampler`, `MFASample`, `MetropolisSampler`,
@@ -81,25 +81,25 @@ of `nsamples`.
 
 Construction fidelity ladder: `MFASampler(reference)` (single global isotropic) →
 `MFASampler(ExchangeModel(...); reference)` (multi-sublattice isotropic / tensorial) →
-`MFASampler(model::SCEPredictor; reference)` (full multipole, all clusters and `l`).
+`MFASampler(model::SLCEModel; reference)` (full multipole, all clusters and `l`).
 
-`MetropolisSampler(model::SCEPredictor; reference = nothing)` is the joint-Boltzmann
+`MetropolisSampler(model::SLCEModel; reference = nothing)` is the joint-Boltzmann
 sibling behind the same `sample` verb: single-spin Metropolis on the training cell at an
-**absolute** temperature — exactly one of `temperature` [kelvin, via `SCETools.KB_EV`,
+**absolute** temperature — exactly one of `temperature` [kelvin, via `SLCETools.KB_EV`,
 eV-model assumption] or `kT` [`k_B·T`, model energy units] (no `τ`, no `l=1` Perron
 scale, so any body order works) → `MCSample` (configs + parallel `kT` / `temperature` /
 `energy` / `acceptance`). Scope is configuration sampling only; supercell tiling and
 thermodynamic observables (`m(T)`, `T_c`) are explicitly deferred — see
 `docs/specs/mc-sampling.md`.
 
-## Public API (VASP I/O — `SCETools.VASP`)
+## Public API (VASP I/O — `SLCETools.VASP`)
 
 The concrete VASP adapter the fitting core leaves out (the core owns only the abstract DFT-data
 seam). Both directions, with one shared frame / format convention so a write → read round-trip
 is the identity:
 
 - **read** — `read_poscar(path) -> Crystal`; `Oszicar(paths; saxis, energy_kind, mint)` (an
-  `AbstractDFTSource`, consumed by `SCEFitting.read_configs` / `SCEDataset`). Produces
+  `AbstractDFTSource`, consumed by `SLCE.read_configs` / `SLCEDataset`). Produces
   training data.
 - **write** — `write_poscar(path, crystal; …)`; `write_incar(path, directions; magmoms, base,
   constrain, saxis, …)`; `write_inputs(dir | rootdir, crystal, config | configs; …)` (a POSCAR +
@@ -118,9 +118,9 @@ An efficient SCE model-construction loop, closing the sample → label → refit
 
 1. **Propose** candidate configurations with the MFA sampler at a chosen `τ` (cheap,
    physically representative), optionally targeted by an acquisition criterion.
-2. **Label** them with DFT (write inputs via `SCETools.VASP`, run an external solver,
+2. **Label** them with DFT (write inputs via `SLCETools.VASP`, run an external solver,
    read back energies / torques as `SpinDatum`).
-3. **Refit** the SCE model with `SCEFitting.fit` / `refit` on the augmented dataset.
+3. **Refit** the SCE model with `SLCE.fit` / `refit` on the augmented dataset.
 4. **Assess** uncertainty / acquisition and iterate until a target is met.
 
 The existing `ActiveSCE.jl` (GroupARD posterior, acquisition policies, finite-T campaign

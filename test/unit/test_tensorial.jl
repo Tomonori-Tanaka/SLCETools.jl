@@ -5,14 +5,14 @@
 # reproduces the quadrature self-consistency, and that DMI tilts a collinear reference.
 
 using Test
-using SCEFitting
-using SCETools
+using SLCE
+using SLCETools
 using LinearAlgebra
 using Random
 using StaticArrays
 using Statistics: mean
 
-const MR = SCETools
+const MR = SLCETools
 
 _Z(l, m, v) = MR.Harmonics.Zlm(l, m, SVector{3,Float64}(v))
 _mean_Z(l, m, configs, a) = mean(_Z(l, m, c[:, a]) for c in configs)

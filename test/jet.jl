@@ -1,6 +1,6 @@
-using SCETools
+using SLCETools
 using JET
 
 @testset "JET" begin
-    JET.test_package(SCETools; target_modules = (SCETools,))
+    JET.test_package(SLCETools; target_modules = (SLCETools,))
 end

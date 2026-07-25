@@ -16,15 +16,15 @@
 # self-consistency (P1+) needs. RNG is always an explicit `AbstractRNG`.
 #
 # Self-contained submodule: pure on-sphere mean-field math with no SCE coupling, depending
-# only on the core's tesseral harmonics. Mirrors `SCEFitting`'s numeric-kernel submodules
+# only on the core's tesseral harmonics. Mirrors `SLCE`'s numeric-kernel submodules
 # (`Harmonics`, `AngularMomentum`). The parent re-binds the names it needs with
-# `using .MeanFieldEngine: …`; the primitives are also reachable as `SCETools.MeanFieldEngine.*`.
+# `using .MeanFieldEngine: …`; the primitives are also reachable as `SLCETools.MeanFieldEngine.*`.
 module MeanFieldEngine
 
 using StaticArrays: SVector, MVector
 using LinearAlgebra: norm, dot, cross
 using Random: AbstractRNG
-import SCEFitting.Harmonics
+import SLCE.Harmonics
 
 # Only the genuinely public primitives are exported; the `_`-prefixed internals
 # (`_random_unit`, `_field_lmax`, `_l1_field`, `_rotate`, …) stay private — the parent

@@ -40,7 +40,7 @@ end
 """
     ExchangeModel(Jiso; onsite = nothing)
     ExchangeModel(bilinear; onsite = nothing)
-    ExchangeModel(model::SCEPredictor)
+    ExchangeModel(model::SLCEModel)
 
 Neutral carrier of the bilinear exchange (and single-ion anisotropy) the mean-field
 sampler needs.
@@ -53,7 +53,7 @@ sampler needs.
   exchange: `bilinear[a,b] = S_ab` with `bilinear[b,a] ≈ S_ab'` (the field is
   `g_a = Σ_b S_ab ⟨e_b⟩`); the symmetric/antisymmetric parts carry anisotropic / DM
   exchange.
-- `ExchangeModel(model)` — extract `bilinear` and `onsite` from a fitted `SCEPredictor`
+- `ExchangeModel(model)` — extract `bilinear` and `onsite` from a fitted `SLCEModel`
   by reusing the core's bilinear (`ls=[1,1]`) and single-ion (`ls=[2]`) extraction; only the
   higher-order / higher-`l` channels are dropped (a P4 extension) and reported via `@warn`.
 """
@@ -110,7 +110,7 @@ Base.show(io::IO, m::ExchangeModel) =
 
 The digested full-multipole mean field of a fitted SCE (P4): every cluster term
 (`_MFATerm`), the `lmax`, and the bilinear [`ExchangeModel`](@ref) (used only for the
-`l=1` temperature scale `ρ`). Built by `MultipoleModel(model::SCEPredictor)`; consumed by the
+`l=1` temperature scale `ρ`). Built by `MultipoleModel(model::SLCEModel)`; consumed by the
 [`MFASampler`](@ref) tensorial/Metropolis path.
 
 Renamed from `MultipoleField` (it is a coupling *model*, the full-fidelity sibling of
@@ -145,7 +145,7 @@ Base.show(io::IO, mf::MultipoleModel) =
 """
     MFASampler(reference) <: AbstractSampler
     MFASampler(exch::ExchangeModel; reference)
-    MFASampler(model::SCEPredictor; reference)
+    MFASampler(model::SLCEModel; reference)
 
 Mean-field spin-configuration sampler. Every spin is drawn from `vMF(ê_a, κ_a)` about its
 reference direction; the per-atom concentration is set by the mean-field self-consistency

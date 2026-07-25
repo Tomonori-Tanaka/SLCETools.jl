@@ -1,11 +1,11 @@
 # API reference
 
 ```@meta
-CurrentModule = SCETools
+CurrentModule = SLCETools
 ```
 
 ```@docs
-SCETools
+SLCETools
 ```
 
 Every public type and function. The headline workflows are `MFASampler(model; reference)`
@@ -17,12 +17,12 @@ docstrings are shown on those pages and indexed below).
 
 The surface is two-tiered: the **exported** workflow above, plus a **public,
 unexported** tier declared with the Julia `public` keyword and reached by qualification
-(`SCETools.<name>`): [`MultipoleModel`](@ref), the viz plumbing
+(`SLCETools.<name>`): [`MultipoleModel`](@ref), the viz plumbing
 ([`SphereGrid`](@ref), [`fibonacci_sphere`](@ref), [`harmonic_basis`](@ref),
-[`site_probabilities`](@ref)), and the submodules `SCETools.MeanFieldEngine` (the engine
+[`site_probabilities`](@ref)), and the submodules `SLCETools.MeanFieldEngine` (the engine
 primitives `site_potential`, `sample_vmf`, `sample_vmf_field`, `sample_site_metropolis`,
 `SphereQuadrature`, `sphere_quadrature`, `field_scale`, `multipole_average`) and
-`SCETools.VASP`.
+`SLCETools.VASP`.
 
 ```@index
 ```
@@ -58,7 +58,7 @@ the interactive viewer) is documented under
 ## MeanFieldEngine kernels
 
 The `MeanFieldEngine` submodule (public, unexported — call as
-`SCETools.MeanFieldEngine.site_potential` etc.) is the self-contained single-site
+`SLCETools.MeanFieldEngine.site_potential` etc.) is the self-contained single-site
 engine: the potential `V(e) = Σ c·Z`, the closed-form vMF draw, the general Metropolis
 draw (rotation + antipodal-flip mixture proposal), and the deterministic sphere
 quadrature for the multipole averages. Pure on-sphere math with no SCE coupling.
@@ -75,10 +75,10 @@ MeanFieldEngine.multipole_average
 
 ## VASP I/O
 
-The namespaced `SCETools.VASP` submodule is the concrete VASP adapter: it **reads** DFT
-training data ([`read_poscar`](@ref SCETools.VASP.read_poscar),
-[`Oszicar`](@ref SCETools.VASP.Oszicar)) and **writes** constrained-noncollinear inputs from
-sampled configurations ([`write_inputs`](@ref SCETools.VASP.write_inputs),
-[`write_incar`](@ref SCETools.VASP.write_incar),
-[`write_poscar`](@ref SCETools.VASP.write_poscar)). See [VASP I/O](guide/vasp.md); the
+The namespaced `SLCETools.VASP` submodule is the concrete VASP adapter: it **reads** DFT
+training data ([`read_poscar`](@ref SLCETools.VASP.read_poscar),
+[`Oszicar`](@ref SLCETools.VASP.Oszicar)) and **writes** constrained-noncollinear inputs from
+sampled configurations ([`write_inputs`](@ref SLCETools.VASP.write_inputs),
+[`write_incar`](@ref SLCETools.VASP.write_incar),
+[`write_poscar`](@ref SLCETools.VASP.write_poscar)). See [VASP I/O](guide/vasp.md); the
 docstrings are shown there.

@@ -1,6 +1,6 @@
-using SCETools
+using SLCETools
 using Aqua
 
 @testset "Aqua" begin
-    Aqua.test_all(SCETools)
+    Aqua.test_all(SLCETools)
 end

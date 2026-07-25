@@ -30,7 +30,7 @@
 # coupling *ratios* matter (the single-ion strength relative to the exchange is physical).
 
 # Tesseral normalization constants, bound to the core's single definition
-# (`SCEFitting.Harmonics.N1/A2/B2`, also used by its bilinear extraction
+# (`SLCE.Harmonics.N1/A2/B2`, also used by its bilinear extraction
 # `_l1_pair_matrix` / `_l2_onsite_matrix`) so this forward mapping and the core's
 # inverse cannot drift apart: Z_{1,m} = N1·(component); the l=2 constants below.
 const _N1 = Harmonics.N1

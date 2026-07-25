@@ -5,13 +5,13 @@
 # physics as Magesty's `MfaSampling`.
 
 using Test
-using SCEFitting
-using SCETools
+using SLCE
+using SLCETools
 using LinearAlgebra
 using Random
 using Statistics: mean
 
-const MR = SCETools
+const MR = SLCETools
 
 _lang(κ) = coth(κ) - 1 / κ
 
@@ -137,7 +137,7 @@ _zref(n) = repeat(Float64[0, 0, 1], 1, n)
         sw.m[1][1] = -99.0
         @test sw.m[2][1] != -99.0
         # the inner constructor rejects non-parallel configs/tau/m
-        @test_throws DimensionMismatch SCETools.MFASample([zeros(3, 1)], [0.5, 0.6], [[1.0]])
+        @test_throws DimensionMismatch SLCETools.MFASample([zeros(3, 1)], [0.5, 0.6], [[1.0]])
     end
 
     @testset "sweep by a magnetization collection mirrors the τ collection" begin

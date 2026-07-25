@@ -2,7 +2,7 @@ using Test
 
 const TEST_MODE = get(ENV, "TEST_MODE", "default")
 
-@testset "SCETools.jl" begin
+@testset "SLCETools.jl" begin
     if TEST_MODE in ("default", "all", "unit")
         include("unit/test_site_engine.jl")
         include("unit/test_mfa_sampler.jl")

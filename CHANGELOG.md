@@ -6,6 +6,15 @@ release, so everything lives under *Unreleased*.
 
 ## [Unreleased]
 
+### Changed — BREAKING: package renamed SCETools.jl → SLCETools.jl (SLCE family, M0)
+
+- The whole family is renamed to the **spin–lattice cluster expansion (SLCE)**
+  stem per `docs/specs/spin-lattice-ce-design.md` §2 (SLCE.jl /
+  SLCEMonteCarlo.jl / SLCEDynamics.jl / SLCETools.jl). Package + module name
+  changed; **UUID kept** (path-dev Manifests stay resolvable). Old model /
+  checkpoint artifacts are unaffected (persistence schemas carry versions,
+  not package names).
+
 ### Changed — quadrature memoization in the Anderson self-consistency
 
 - The tensorial and full-multipole self-consistency loops

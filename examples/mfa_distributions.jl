@@ -16,9 +16,9 @@
 # anisotropy, full SCE multipoles) export through the very same `write_mfa_distributions`
 # — only the per-atom coefficient length (lmax) grows.
 
-using SCEFitting
-using SCETools
-using SCETools.VASP: read_poscar
+using SLCE
+using SLCETools
+using SLCETools.VASP: read_poscar
 
 # --- optional CLI args: tau_min tau_max ntau [npoints] ---------------------------
 if !isempty(ARGS) && ARGS[1] in ("-h", "--help")

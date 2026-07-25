@@ -5,7 +5,7 @@
 **P0 (engine), P1 (single global isotropic), P2 (multi-sublattice isotropic), P3
 (tensorial exchange + single-ion, noncollinear), and P4 (full multipole / many-body)
 are landed**, as are the P5 DFT writers, the POSCAR / OSZICAR readers
-(`SCETools.VASP`), and the Documenter site; the remaining P5 items are the VASP
+(`SLCETools.VASP`), and the Documenter site; the remaining P5 items are the VASP
 reference reader (POSCAR + `MAGMOM`) and the external `Jij` (TB2J) reader.
 
 **Goal.** Generate physically representative finite-temperature spin
@@ -107,7 +107,7 @@ AbstractSampler            # dispatch seam; future Metropolis-MC / spin-spiral s
  └─ MFASampler             # single-site mean-field sampler (this spec)
 
 ExchangeModel              # neutral bilinear+single-ion carrier (tensorial 𝓙_ij, A_i)
- ├─ from an SCEPredictor   # isotropic+DMI+anisotropic bilinear via the core's public
+ ├─ from an SLCEModel   # isotropic+DMI+anisotropic bilinear via the core's public
  │                         #   `bilinear_terms` extraction; single-ion via ls=[2]
  └─ from external Jij      # (i, j, R, 𝓙::SMatrix{3,3}) lists (Lichtenstein / TB2J) — planned
 
@@ -121,7 +121,7 @@ Three sampler constructions, increasing in fidelity:
 2. `MFASampler(exch::ExchangeModel; reference)` — per-sublattice MFA on a tensorial
    bilinear + single-ion model. Covers external `Jij` and the bilinear truncation of
    an SCE.
-3. `MFASampler(model::SCEPredictor; reference)` — full multipole MFA over **all** SCE
+3. `MFASampler(model::SLCEModel; reference)` — full multipole MFA over **all** SCE
    clusters and harmonic orders (higher-order / many-body). The most faithful; only
    the SCE source carries the higher-`l` structure.
 
@@ -149,9 +149,9 @@ quadrature (accurate), and the final configuration draws use the engine above.
 
 - **The core's public introspection surface `bilinear_terms` / `multipole_terms`**
   (read by `src/mfa/bridge.jl`) already extracts the full 3×3 per-bond bilinear matrix
-  (iso + DMI + anisotropic) and the single-ion matrix from an `SCEPredictor` — the
+  (iso + DMI + anisotropic) and the single-ion matrix from an `SLCEModel` — the
   underlying `_l1_pair_matrix` / `_l2_onsite_matrix` formulas live upstream in the
-  core's `sce/bilinear.jl`. `ExchangeModel(model)` consumes that extraction directly;
+  core's `slce/bilinear.jl`. `ExchangeModel(model)` consumes that extraction directly;
   `MultipoleModel(model)` consumes `multipole_terms`.
 - **`evaluate` / `accumulate_grad!`** (the folded-tensor contraction kernels) compute
   `h_a^{lm}` by contracting `folded` against neighbor multipoles `⟨Z_b⟩` while leaving
@@ -188,8 +188,8 @@ sampler = MFASampler(scemodel; reference = seed)
 samp    = sample(sampler; tau = range(0.1, 0.95; length = 10), nsamples = 20, rng = rng)
 
 # ── feed the existing pipeline (energies/torques come from DFT, out of band) ──
-ds = SCEDataset(basis, samp.configs, energies)   # or (…, energies, torques)
-f  = fit(SCEFit, ds, Ridge(lambda = 1e-4))
+ds = SLCEDataset(basis, samp.configs, energies)   # or (…, energies, torques)
+f  = fit(SLCEFit, ds, Ridge(lambda = 1e-4))
 
 # ── inspection helpers ───────────────────────────────────────────────────────
 mfa_sublattice_m(sampler, 0.6)                   # per-sublattice m_a(τ)
@@ -237,7 +237,7 @@ independently from `P(e_a) ∝ exp(−β H_a^MF(e_a))` via the `:vmf` fast path
 
 ## 5. Sources and I/O
 
-- **SCE model → `ExchangeModel` / direct `SCEPredictor` sampler.** The “simple SCE near a
+- **SCE model → `ExchangeModel` / direct `SLCEModel` sampler.** The “simple SCE near a
   reference state” path. The bilinear extraction reads the core's public
   `bilinear_terms`; the full multipole path reads `multipole_terms`
   (both in `src/mfa/bridge.jl`).
@@ -263,7 +263,7 @@ independently from `P(e_a) ∝ exp(−β H_a^MF(e_a))` via the `:vmf` fast path
   the molecular-field contraction must use the **same** `Z_lm` and folded-tensor
   conventions as `evaluate` (linked site — change one, check both).
 - The exchange extraction reads the core's public `bilinear_terms`, whose matrix
-  formulas (`_l1_pair_matrix` / `_l2_onsite_matrix`, in the core's `sce/bilinear.jl`)
+  formulas (`_l1_pair_matrix` / `_l2_onsite_matrix`, in the core's `slce/bilinear.jl`)
   carry an energy-reconstruction gate (`_reconstruct_energy ≈ predict_energy − j0`): if
   the harmonic normalization or the `(4π)^(N/2)` scale moves, both move together.
 - Reference equilibrium: the molecular field at the reference should be parallel to
@@ -324,7 +324,7 @@ All resolved. Conservative, exactness-leaning defaults with opt-in escapes/exten
 - **D5 — External reader: raw constructor always, TB2J first.**
   `ExchangeModel(crystal, bonds; onsite)` (raw `(i,j,R,𝓙)` + `A_i`) is the intended
   always-available entry (**not yet implemented** — today's constructors take the
-  summed `Jiso` / `bilinear` matrices or a fitted `SCEPredictor`); a **TB2J** reader
+  summed `Jiso` / `bilinear` matrices or a fitted `SLCEModel`); a **TB2J** reader
   (Lichtenstein tensorial `Jij`) lands with the remaining P5 work. Other formats on
   demand.
 
@@ -345,7 +345,7 @@ All resolved. Conservative, exactness-leaning defaults with opt-in escapes/exten
 - **Higher-order (P4):** a known 3-body / biquadratic model reproduces its analytic
   multipole self-consistency; many-body factorization matches a direct mean-field
   evaluation.
-- **End-to-end:** MFA-sampled configs fed through `SCEDataset` → `fit` recover known
+- **End-to-end:** MFA-sampled configs fed through `SLCEDataset` → `fit` recover known
   couplings at least as well as random-direction sampling, with better low-`T`
   coverage. `numerical-reviewer` pass on the self-consistency and the molecular-field
   contraction.
@@ -388,7 +388,7 @@ All resolved. Conservative, exactness-leaning defaults with opt-in escapes/exten
       represent it), so the self-consistency `m_a = ⟨e·ê_a⟩` uses the quadrature and the
       draw uses the **Metropolis** engine. Tesseral-coefficient conversions (`_l1_coeffs!`/
       `_l2_coeffs!`, exact inverses of the core's `_l1_pair_matrix`/`_l2_onsite_matrix` in
-      `sce/bilinear.jl`; the constants are bound to `SCEFitting.Harmonics.N1/A2/B2`).
+      `slce/bilinear.jl`; the constants are bound to `SLCE.Harmonics.N1/A2/B2`).
       **Noncollinear references** (rigid-axis D2, with a stationarity warning). Tests:
       easy-axis cone sharpening / above-`T_MF` persistence, easy-plane girdle, Metropolis ↔
       quadrature agreement on `⟨Z_2m⟩`, DMI tilt of a collinear reference, the τ → 0 limit.
@@ -399,12 +399,12 @@ All resolved. Conservative, exactness-leaning defaults with opt-in escapes/exten
       harmonic left symbolic). The order parameters are the **full per-atom multipole
       averages `⟨Z_lm⟩_a`** (`l ≤ lmax`), iterated to self-consistency by quadrature;
       `β = 3/(ρτ)` with `ρ` the `l=1` (bilinear) Perron; the draw is Metropolis.
-      `MFASampler(model::SCEPredictor; reference)` is the user entry. Validated by the exact
+      `MFASampler(model::SLCEModel; reference)` is the user entry. Validated by the exact
       reduction to the single-global Langevin curve for a pure-bilinear model, scale
       invariance, and — the headline — the many-body factorization checked against the
       conditional mean SCE energy `⟨E|e_a⟩` of a biquadratic model (matches to ~MC noise;
       a deterministic cross-check confirms `V_a/β = ⟨E|e_a⟩` to machine precision).
-- [x] P5 DFT-input writers (`SCETools.VASP.write_incar` / `write_inputs` /
+- [x] P5 DFT-input writers (`SLCETools.VASP.write_incar` / `write_inputs` /
       `write_poscar`) and the POSCAR / OSZICAR readers (`read_poscar`, `Oszicar`) —
       landed in `src/io/vasp.jl`, gated by `test/unit/test_vasp*.jl` + `test/oracle/`.
 - [ ] P5 (remaining): VASP reference reader (POSCAR + `MAGMOM`); external `Jij` (TB2J).

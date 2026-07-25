@@ -3,7 +3,7 @@
 # own); `_emit_json` writes it with no external JSON dependency (the schema is fixed and
 # shallow). Grid construction is in `grid.jl`, the per-atom coefficients in `distributions.jl`.
 
-# Normalize -0.0 → 0.0 for reproducible bytes (mirrors SCEFitting's persist.jl `_jnum`).
+# Normalize -0.0 → 0.0 for reproducible bytes (mirrors SLCE's persist.jl `_jnum`).
 _jnum(x::Real)::Float64 = (y = Float64(x); y == 0.0 ? 0.0 : y)
 
 # Build the self-describing document (a Dict tree, serializer-agnostic and unit-testable).

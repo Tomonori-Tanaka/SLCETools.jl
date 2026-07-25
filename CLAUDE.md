@@ -7,8 +7,8 @@
 ## Project goal
 
 Auxiliary tooling around the SCE fitting core
-[`SCEFitting.jl`](../SCEFitting.jl): utilities that **consume** a fitted
-`SCEPredictor` rather than build one. The first component is the **mean-field (MFA)
+[`SLCE.jl`](../SLCE.jl): utilities that **consume** a fitted
+`SLCEModel` rather than build one. The first component is the **mean-field (MFA)
 spin-configuration sampler** — draw physically representative finite-temperature spin
 configurations from the single-site mean field of a fitted model (or a hand-built
 exchange model) at a controlled reduced temperature `τ = T/T_MF`. Its joint-Boltzmann
@@ -21,16 +21,16 @@ numerical correctness and reproducibility, and the same physical conventions as 
 core (this package never re-derives them — it reads the fitted Hamiltonian through the
 core's public surface).
 
-This package depends on `SCEFitting` and reads a fitted model **only** through its
+This package depends on `SLCE` and reads a fitted model **only** through its
 public introspection surface — `multipole_terms`, `bilinear_terms`, `n_atoms(model)`,
-and the tesseral spherical-harmonic submodule `SCEFitting.Harmonics` (`Zlm`,
+and the tesseral spherical-harmonic submodule `SLCE.Harmonics` (`Zlm`,
 `lm_index`) — never the SALC-basis internals (`model.basis.salc_basis.salcs`, `SALCMember`,
 `SALCTerm`). During development the dependency is a path-dev:
-`Pkg.develop(path="../SCEFitting.jl")`.
+`Pkg.develop(path="../SLCE.jl")`.
 
 ## Numerical / physics conventions
 
-Inherited from the core (`SCEFitting`'s `CLAUDE.md`); the ones this package leans on:
+Inherited from the core (`SLCE`'s `CLAUDE.md`); the ones this package leans on:
 
 - **Spin directions are unit vectors**; configuration layout `3 × n_atoms` (rows x,y,z;
   columns atoms). The `reference` is the same layout.
@@ -47,8 +47,8 @@ Inherited from the core (`SCEFitting`'s `CLAUDE.md`); the ones this package lean
 
 ## Coupled ("linked") code sites — change one, check all
 
-- **`mfa/bridge.jl` ↔ the core's introspection contract** (`SCEFitting`'s
-  `sce/introspect.jl`): `_scaled_multipole_terms` consumes `multipole_terms` and applies
+- **`mfa/bridge.jl` ↔ the core's introspection contract** (`SLCE`'s
+  `slce/introspect.jl`): `_scaled_multipole_terms` consumes `multipole_terms` and applies
   `coef·(4π)^(body/2)` (feeding both `MultipoleModel(model)` and
   `MetropolisSampler(model)`); `ExchangeModel(model)` consumes `bilinear_terms` (the `3×3`
   bilinear / single-ion matrices). If a `MultipoleTerm` field or the scale convention
@@ -65,19 +65,19 @@ Inherited from the core (`SCEFitting`'s `CLAUDE.md`); the ones this package lean
   the engine's proposal (`_rotate` + `_METROPOLIS_FLIP_FRACTION`) and the MFA sampler's
   `_random_rotation` / `_normalize_reference`. Change one side and re-check the
   machine-precision local↔global gate in `test_mc_sampler.jl`.
-- **`mfa/engine.jl` (`MeanFieldEngine`) ↔ `SCEFitting.Harmonics`** (`Zlm`, `lm_index`): the
+- **`mfa/engine.jl` (`MeanFieldEngine`) ↔ `SLCE.Harmonics`** (`Zlm`, `lm_index`): the
   engine primitives (`site_potential`, the vMF / Metropolis draws, the quadrature) evaluate
-  tesseral harmonics through the core submodule (bound here by `import SCEFitting.Harmonics`,
+  tesseral harmonics through the core submodule (bound here by `import SLCE.Harmonics`,
   on the unit-direction `Zlm_unsafe` fast path — `Harmonics` is part of the core's declared
   (`public`-keyword) stable surface, `Zlm_unsafe` included). A normalization change upstream
   shifts every multipole average.
 - **`mfa/exchange.jl` `_l1_coeffs!` / `_l2_coeffs!`** (field → tesseral coefficients) are the
   *forward* of the core's `_l1_pair_matrix` / `_l2_onsite_matrix` (tesseral → `3×3`, in the
-  core's `sce/bilinear.jl`). The tesseral constants `_N1`/`_A2`/`_B2` are **bound to**
-  `SCEFitting.Harmonics.N1/A2/B2` (single definition upstream), so the forward and inverse
+  core's `slce/bilinear.jl`). The tesseral constants `_N1`/`_A2`/`_B2` are **bound to**
+  `SLCE.Harmonics.N1/A2/B2` (single definition upstream), so the forward and inverse
   conversions cannot drift apart. The bilinear extraction uses the core's (inverse) matrices
   via `bilinear_terms`; do not duplicate that delicate conversion here.
-- **`io/vasp.jl` — read ↔ write inverse-consistency** (`SCETools.VASP`, one module holds both):
+- **`io/vasp.jl` — read ↔ write inverse-consistency** (`SLCETools.VASP`, one module holds both):
   (1) **SAXIS frame** — one `_saxis_rotation` (`R = Rz(α)Ry(β)`) serves both; the reader rotates
   SAXIS → Cartesian by `R`, the writer Cartesian → SAXIS by `Rᵀ`, so a write → read round-trip is
   the identity. The INCAR's *declared* SAXIS line and the frame the moments are written in must
@@ -85,7 +85,7 @@ Inherited from the core (`SCEFitting`'s `CLAUDE.md`); the ones this package lean
   `_poscar_order` must reproduce `write_poscar`'s species grouping exactly, or `write_inputs`
   silently misassigns moments to atoms. (3) **MAGMOM = magnitude · direction**, M_CONSTR ==
   MAGMOM under `constrain`. (4) The **torque sign / SpinDatum layout** is owned upstream by
-  `SCEFitting`'s `dftsource.jl` (`τ_a = m_a × B_a`); the OSZICAR reader must keep producing
+  `SLCE`'s `dftsource.jl` (`τ_a = m_a × B_a`); the OSZICAR reader must keep producing
   that. Gates: `test/unit/test_vaspio.jl` (read), `test/unit/test_vasp_incar.jl` (write,
   round-trip / order / formatting), `test/oracle/` (parsers vs Magesty bit-for-bit). The sampler
   gives only directions + an order parameter `m_a ∈ [0,1]`, **not** μ_B magnitudes — the write
@@ -101,7 +101,7 @@ Inherited from the core (`SCEFitting`'s `CLAUDE.md`); the ones this package lean
 | `julia --project=test/oracle test/oracle/runtests.jl` | VASP parsers vs pinned Magesty |
 
 The suite (`test/runtests.jl`) dispatches on `TEST_MODE`
-(`default`/`all`/`unit`/`aqua`/`jet`). It needs `SCEFitting` available (path-dev).
+(`default`/`all`/`unit`/`aqua`/`jet`). It needs `SLCE` available (path-dev).
 The oracle suite is a separate environment carrying the pinned `Magesty.jl` the
 core suite deliberately omits.
 

@@ -6,13 +6,13 @@
 # per-atom magnetizations.
 
 using Test
-using SCEFitting
-using SCETools
+using SLCE
+using SLCETools
 using LinearAlgebra
 using Random
 using Statistics: mean
 
-const MR = SCETools
+const MR = SLCETools
 
 # project a drawn config's spins onto their reference directions, averaged over configs
 function _proj_per_atom(configs, ref)
@@ -110,9 +110,9 @@ end
         # solve's handling of uncoupled (free) spins.
         lat = Lattice([8.0 0 0; 0 8.0 0; 0 0 10.0])
         cr = Crystal(lat, [0 0 0 0; 0 0 0 0; 0.0 0.25 0.5 0.75], [1, 1, 1, 1], ["Fe"])
-        b = SCEBasis(cr, BasisSpec(; nbody = 2, cutoff = 2.6, lmax = [1], isotropy = true))
+        b = SLCEBasis(cr, BasisSpec(; nbody = 2, cutoff = 2.6, lmax = [1], isotropy = true))
         # only the first SALC (the 1-2 bond orbit) carries a coupling; the rest are zero
-        model = SCEPredictor(b, 0.0, vcat([0.0137], zeros(n_salcs(b) - 1)))
+        model = SLCEModel(b, 0.0, vcat([0.0137], zeros(n_salcs(b) - 1)))
         ex = ExchangeModel(model)
         @test ex.natoms == 4
         @test ex.Jiso ≈ ex.Jiso'                                   # symmetric
@@ -143,15 +143,15 @@ end
         lat = Lattice(Matrix(3.0 * I(3)))
         # a single-ion (ls=[2]) model: now extracted into onsite (tensorial), not dropped
         cr1 = Crystal(lat, reshape([0.0, 0, 0], 3, 1), [1], ["Fe"])
-        b1 = SCEBasis(cr1, BasisSpec(; nbody = 1, cutoff = 1.5, lmax = [2], isotropy = false))
-        m1 = SCEPredictor(b1, 0.0, ones(n_salcs(b1)))
+        b1 = SLCEBasis(cr1, BasisSpec(; nbody = 1, cutoff = 1.5, lmax = [2], isotropy = false))
+        m1 = SLCEModel(b1, 0.0, ones(n_salcs(b1)))
         ex1 = ExchangeModel(m1)
         @test !ex1.isotropic
         @test norm(ex1.onsite[1]) > 0
         # higher-l 2-body channels ([1,2], [2,2]) are unsupported and reported
         cr2 = Crystal(lat, [0.2 -0.2; 0.0 0.0; 0.0 0.0], [1, 1], ["Fe"])
-        b2 = SCEBasis(cr2, BasisSpec(; nbody = 2, cutoff = 1.5, lmax = [2], isotropy = false))
-        m2 = SCEPredictor(b2, 0.0, ones(n_salcs(b2)))
+        b2 = SLCEBasis(cr2, BasisSpec(; nbody = 2, cutoff = 1.5, lmax = [2], isotropy = false))
+        m2 = SLCEModel(b2, 0.0, ones(n_salcs(b2)))
         @test_logs (:warn,) ExchangeModel(m2)
     end
 

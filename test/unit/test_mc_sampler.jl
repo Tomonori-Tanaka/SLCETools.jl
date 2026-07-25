@@ -6,29 +6,29 @@
 # rotation (isotropic energy invariance), seed reproducibility, and the guards.
 
 using Test
-using SCEFitting
-using SCETools
+using SLCE
+using SLCETools
 using LinearAlgebra
 using Random
 using StaticArrays
 using Statistics: mean
 
-const MR = SCETools
+const MR = SLCETools
 
 # The same fixtures as test_multipole.jl: a genuine higher-multipole two-atom model and a
 # clean ferromagnetic Heisenberg dimer (couples atoms 1–2; atoms 3–4 free).
 function _mc_biquadratic_model(seed)
     lat = Lattice(Matrix(3.0 * I(3)))
     cr = Crystal(lat, [0.2 -0.2; 0.0 0.0; 0.0 0.0], [1, 1], ["Fe"])
-    b = SCEBasis(cr, BasisSpec(; nbody = 2, cutoff = 1.5, lmax = [2], isotropy = false))
-    return SCEPredictor(b, 0.0, 0.05 .* randn(MersenneTwister(seed), n_salcs(b)))
+    b = SLCEBasis(cr, BasisSpec(; nbody = 2, cutoff = 1.5, lmax = [2], isotropy = false))
+    return SLCEModel(b, 0.0, 0.05 .* randn(MersenneTwister(seed), n_salcs(b)))
 end
 
 function _mc_dimer_model()
     lat = Lattice([8.0 0 0; 0 8.0 0; 0 0 10.0])
     cr = Crystal(lat, [0 0 0 0; 0 0 0 0; 0.0 0.25 0.5 0.75], [1, 1, 1, 1], ["Fe"])
-    b = SCEBasis(cr, BasisSpec(; nbody = 2, cutoff = 2.6, lmax = [1], isotropy = true))
-    return SCEPredictor(b, 0.0, vcat([-0.02], zeros(n_salcs(b) - 1)))   # negative ⇒ ferro
+    b = SLCEBasis(cr, BasisSpec(; nbody = 2, cutoff = 2.6, lmax = [1], isotropy = true))
+    return SLCEModel(b, 0.0, vcat([-0.02], zeros(n_salcs(b) - 1)))   # negative ⇒ ferro
 end
 
 # A single spin in an l=1 field along +z: V(e) = c0·Z_10(e) = c0·N1·e_z.
@@ -44,7 +44,7 @@ _mc_rand_config(rng, n) = reduce(hcat, [Vector(MR._random_unit(rng)) for _ = 1:n
         @test s isa AbstractSampler
         @test s.natoms == 4
         @test s.lmax == 1
-        # one canonical member per physical bond (SCEFitting v4 canonical members);
+        # one canonical member per physical bond (SLCE v4 canonical members);
         # both bond sites reference that single term
         @test length(s.terms) == 1
         @test s.terms_of[1] == [1] && s.terms_of[2] == [1]
@@ -186,7 +186,7 @@ _mc_rand_config(rng, n) = reduce(hcat, [Vector(MR._random_unit(rng)) for _ = 1:n
 
     @testset "kelvin ↔ kT control" begin
         s = MetropolisSampler(_mc_dimer_model())
-        kb = SCETools.KB_EV
+        kb = SLCETools.KB_EV
         a = sample(s, 3; temperature = 300.0, burnin = 20, thin = 2,
                    rng = MersenneTwister(6))
         b = sample(s, 3; kT = kb * 300.0, burnin = 20, thin = 2,

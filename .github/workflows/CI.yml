@@ -20,29 +20,29 @@ jobs:
         version: ["1.12"]
         os: [ubuntu-latest, macos-latest]
     steps:
-      # SCEFitting is a path-dev dependency (../SCEFitting.jl); check both repos out as
-      # siblings so the Manifest's relative path resolves. Once SCEFitting is registered,
+      # SLCE is a path-dev dependency (../SLCE.jl); check both repos out as
+      # siblings so the Manifest's relative path resolves. Once SLCE is registered,
       # drop the second checkout and the develop step.
       - uses: actions/checkout@v4
         with:
-          path: SCETools.jl
+          path: SLCETools.jl
       - uses: actions/checkout@v4
         with:
-          repository: Tomonori-Tanaka/SCEFitting.jl
-          path: SCEFitting.jl
+          repository: Tomonori-Tanaka/SLCE.jl
+          path: SLCE.jl
       - uses: julia-actions/setup-julia@v2
         with:
           version: ${{ matrix.version }}
       - uses: julia-actions/cache@v2
       - name: Develop the path dependency and instantiate
         run: |
-          julia --project=SCETools.jl -e '
+          julia --project=SLCETools.jl -e '
             using Pkg
-            Pkg.develop(path = "SCEFitting.jl")
+            Pkg.develop(path = "SLCE.jl")
             Pkg.instantiate()'
       # TEST_MODE=all: unit + Aqua + JET (the oracle suite pins a local Magesty.jl and
       # stays local-only — see CLAUDE.md's test table).
       - name: Run the test suite
-        run: julia --project=SCETools.jl -e 'using Pkg; Pkg.test()'
+        run: julia --project=SLCETools.jl -e 'using Pkg; Pkg.test()'
         env:
           TEST_MODE: all

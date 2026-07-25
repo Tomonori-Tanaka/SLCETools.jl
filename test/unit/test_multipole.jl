@@ -1,37 +1,37 @@
 # P4 of the mean-field sampler (docs/specs/mfa-sampling.md): the full multipole MFA over all
-# SCE clusters and l (`MultipoleModel` / `MFASampler(model::SCEPredictor)`). Validates that the
+# SCE clusters and l (`MultipoleModel` / `MFASampler(model::SLCEModel)`). Validates that the
 # many-body factorization `h_a^{lm} = Σ_φ jφ folded ∏_{b≠a} ⟨Z_b⟩` is built correctly — by
 # the exact reduction to the single-global Langevin curve for a pure-bilinear model, by
 # scale invariance, and (the headline higher-order check) by matching the single-site
 # potential to the conditional mean SCE energy ⟨E | e_a⟩ of a biquadratic model.
 
 using Test
-using SCEFitting
-using SCETools
-using SCETools: MultipoleModel              # public, unexported (built via MFASampler(model))
+using SLCE
+using SLCETools
+using SLCETools: MultipoleModel              # public, unexported (built via MFASampler(model))
 using LinearAlgebra
 using Random
 using StaticArrays
 using Statistics: mean
 
-const MR = SCETools
+const MR = SLCETools
 
 # A 2-body lmax=[2] model carries [1,1] bilinear, [1,2]/[2,2] biquadratic, and [2]
 # single-ion channels — a genuine higher-multipole many-body model.
 function _biquadratic_model(seed)
     lat = Lattice(Matrix(3.0 * I(3)))
     cr = Crystal(lat, [0.2 -0.2; 0.0 0.0; 0.0 0.0], [1, 1], ["Fe"])
-    b = SCEBasis(cr, BasisSpec(; nbody = 2, cutoff = 1.5, lmax = [2], isotropy = false))
-    return SCEPredictor(b, 0.0, 0.05 .* randn(MersenneTwister(seed), n_salcs(b)))
+    b = SLCEBasis(cr, BasisSpec(; nbody = 2, cutoff = 1.5, lmax = [2], isotropy = false))
+    return SLCEModel(b, 0.0, 0.05 .* randn(MersenneTwister(seed), n_salcs(b)))
 end
 
 # A clean ferromagnetic Heisenberg dimer (couples atoms 1–2; pure l=1).
 function _dimer_model()
     lat = Lattice([8.0 0 0; 0 8.0 0; 0 0 10.0])
     cr = Crystal(lat, [0 0 0 0; 0 0 0 0; 0.0 0.25 0.5 0.75], [1, 1, 1, 1], ["Fe"])
-    b = SCEBasis(cr, BasisSpec(; nbody = 2, cutoff = 2.6, lmax = [1], isotropy = true))
+    b = SLCEBasis(cr, BasisSpec(; nbody = 2, cutoff = 2.6, lmax = [1], isotropy = true))
     # only the first SALC (the 1-2 bond orbit) is nonzero: a clean coupled dimer
-    return SCEPredictor(b, 0.0, vcat([-0.02], zeros(n_salcs(b) - 1)))   # negative ⇒ ferro
+    return SLCEModel(b, 0.0, vcat([-0.02], zeros(n_salcs(b) - 1)))   # negative ⇒ ferro
 end
 
 @testset "full multipole sampler (P4)" begin
@@ -39,7 +39,7 @@ end
         mf1 = MultipoleModel(_dimer_model())
         @test mf1.natoms == 4
         @test mf1.lmax == 1
-        # one canonical member per physical bond (SCEFitting v4 canonical members,
+        # one canonical member per physical bond (SLCE v4 canonical members,
         # both directed contributions pre-summed into its folded tensor)
         @test length(mf1.terms) == 1
         mf2 = MultipoleModel(_biquadratic_model(0))
@@ -56,7 +56,7 @@ end
         bad = ExchangeModel(zeros(mf.natoms + 1, mf.natoms + 1))
         @test_throws DimensionMismatch MultipoleModel(mf.natoms, mf.lmax, mf.terms, bad)
         # no terms
-        @test_throws ArgumentError MultipoleModel(mf.natoms, mf.lmax, SCETools._MFATerm[],
+        @test_throws ArgumentError MultipoleModel(mf.natoms, mf.lmax, SLCETools._MFATerm[],
                                                   mf.bilinear)
     end
 
@@ -74,9 +74,9 @@ end
 
     @testset "scale invariance: scaling all couplings leaves m_a(τ) unchanged" begin
         b = _dimer_model().basis
-        s1 = MFASampler(SCEPredictor(b, 0.0, vcat([-0.02], zeros(n_salcs(b) - 1)));
+        s1 = MFASampler(SLCEModel(b, 0.0, vcat([-0.02], zeros(n_salcs(b) - 1)));
                         reference = Float64[0 0 0 0; 0 0 0 0; 1 1 1 1])
-        s9 = MFASampler(SCEPredictor(b, 0.0, vcat([-0.18], zeros(n_salcs(b) - 1)));
+        s9 = MFASampler(SLCEModel(b, 0.0, vcat([-0.18], zeros(n_salcs(b) - 1)));
                         reference = Float64[0 0 0 0; 0 0 0 0; 1 1 1 1])
         for τ in (0.3, 0.6, 0.9)
             @test mfa_sublattice_m(s1, τ) ≈ mfa_sublattice_m(s9, τ) atol = 1e-9

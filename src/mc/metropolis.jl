@@ -27,7 +27,7 @@ Boltzmann's constant in eV/K (the exact CODATA ratio `1.380649e-23 J/K` /
 const KB_EV = 1.380649e-23 / 1.602176634e-19
 
 """
-    MetropolisSampler(model::SCEPredictor; reference = nothing)
+    MetropolisSampler(model::SLCEModel; reference = nothing)
 
 Single-spin Metropolis Monte-Carlo sampler of the **joint** Boltzmann distribution
 `P({e}) ∝ exp(−E({e})/k_BT)` of a fitted SCE on its training cell (periodic images are
@@ -85,7 +85,7 @@ struct MetropolisSampler <: AbstractSampler
     end
 end
 
-MetropolisSampler(model::SCEPredictor;
+MetropolisSampler(model::SLCEModel;
                   reference::Union{Nothing,AbstractMatrix{<:Real}} = nothing) = begin
     terms, lmax = _scaled_multipole_terms(model)
     MetropolisSampler(n_atoms(model), lmax, terms; reference = reference)

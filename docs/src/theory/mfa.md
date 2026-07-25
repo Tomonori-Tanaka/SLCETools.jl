@@ -1,7 +1,7 @@
 # Theory: the mean-field sampler
 
 ```@meta
-CurrentModule = SCETools
+CurrentModule = SLCETools
 ```
 
 The sampler generates finite-temperature spin configurations from the **single-site
@@ -83,5 +83,5 @@ source at full ``l_{\max}``, and the labelled output are design decisions D1–D
 package `docs/specs/mfa-sampling.md`. The physical conventions (unit spins, real tesseral
 harmonics with the per-site ``(4\pi)^{-1/2}`` and per-``N`` ``(4\pi)^{N/2}`` factors) are
 inherited verbatim from
-[SCEFitting.jl](https://github.com/Tomonori-Tanaka/SCEFitting.jl); the sampler reads
+[SLCE.jl](https://github.com/Tomonori-Tanaka/SLCE.jl); the sampler reads
 them through that package's public introspection surface and never re-derives them.

@@ -1,44 +1,44 @@
 # Getting started
 
 ```@meta
-CurrentModule = SCETools
+CurrentModule = SLCETools
 ```
 
 ## Installation
 
-SCETools.jl is an exploratory package and is not registered. It depends on the SCE fitting
-core [SCEFitting.jl](https://github.com/Tomonori-Tanaka/SCEFitting.jl); add both
+SLCETools.jl is an exploratory package and is not registered. It depends on the SCE fitting
+core [SLCE.jl](https://github.com/Tomonori-Tanaka/SLCE.jl); add both
 from their local paths (or git URLs) in the package manager:
 
 ```julia
 using Pkg
-Pkg.develop(path = "/path/to/SCEFitting.jl")   # the SCE fitting core
-Pkg.develop(path = "/path/to/SCETools.jl")
+Pkg.develop(path = "/path/to/SLCE.jl")   # the SCE fitting core
+Pkg.develop(path = "/path/to/SLCETools.jl")
 ```
 
 Both packages have only lightweight dependencies.
 
 ## Sample a Heisenberg dimer from a fitted model
 
-The shortest meaningful end-to-end: build a tiny fitted model with SCEFitting, then draw
+The shortest meaningful end-to-end: build a tiny fitted model with SLCE, then draw
 finite-temperature configurations from its mean field. Here is a 4-atom chain whose
 nearest-neighbour pair (atoms 1–2) carries a ferromagnetic Heisenberg coupling; atoms 3–4 are
 uncoupled.
 
 ```@example gs
-using SCEFitting, SCETools
+using SLCE, SLCETools
 using LinearAlgebra, Random, Statistics
 
 # A 4-atom chain along z; nearest-neighbour 2-body isotropic (Heisenberg) basis.
 lat   = Lattice([8.0 0 0; 0 8.0 0; 0 0 10.0])
 frac  = [0 0 0 0; 0 0 0 0; 0.0 0.25 0.5 0.75]
 chain = Crystal(lat, frac, [1, 1, 1, 1], ["Fe"])
-basis = SCEBasis(chain, BasisSpec(; nbody = 2, cutoff = 2.6, lmax = [1], isotropy = true))
+basis = SLCEBasis(chain, BasisSpec(; nbody = 2, cutoff = 2.6, lmax = [1], isotropy = true))
 
 # A fitted model: the first SALC (the nearest-neighbour Heisenberg bond) carries a
 # negative coefficient ⇒ ferromagnetic along the reference; the other SALCs stay zero.
 # (In practice `jphi` comes from `fit`; here we just set it.)
-model = SCEPredictor(basis, 0.0, vcat([-0.02], zeros(n_salcs(basis) - 1)))
+model = SLCEModel(basis, 0.0, vcat([-0.02], zeros(n_salcs(basis) - 1)))
 nothing # hide
 ```
 
@@ -94,5 +94,5 @@ m_at = thermal_averaged_m(0.5)                 # m(τ = 0.5) from the Langevin s
 - [Sampling](guide/sampling.md) — the `sample` verb in full, the fidelity ladder, and the
   `MFASample` output.
 - [Exchange models](guide/exchange_models.md) — build an `ExchangeModel` by hand (Heisenberg,
-  DMI, anisotropic, single-ion) or extract one from a fitted `SCEPredictor`.
+  DMI, anisotropic, single-ion) or extract one from a fitted `SLCEModel`.
 - [Theory](theory/mfa.md) — the mean-field decoupling and the single-site distributions.

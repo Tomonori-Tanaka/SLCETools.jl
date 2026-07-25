@@ -1,7 +1,7 @@
 # MFA orientation-distribution viewer
 
 Interactive 3D viewer for the per-atom mean-field orientation distributions exported by
-SCETools.jl. The heavy physics runs in Julia; this is a standalone Python/Plotly renderer
+SLCETools.jl. The heavy physics runs in Julia; this is a standalone Python/Plotly renderer
 (it is **not** a dependency of the Julia package). It renders with WebGL in the browser, so
 it is portable and avoids the native-VTK `Segmentation fault: 11` some setups hit on rotate.
 
@@ -10,7 +10,7 @@ it is portable and avoids the native-VTK `Segmentation fault: 11` some setups hi
 1. **Julia** — write the distributions over a temperature sweep to a JSON file:
 
    ```julia
-   using SCETools
+   using SLCETools
    write_mfa_distributions("mfa_distributions.json", sampler, crystal;
                            taus = range(0.2, 0.95; length = 8), npoints = 2562)
    ```
@@ -57,7 +57,7 @@ re-derive them):
 - `grid.Z` — shared basis matrix `Z[i][k] = Z_lm(e_i)`, columns indexed by the package's
   `lm_index(l, m)` ordering, with the `l = 0` column zeroed. The viewer recovers the
   exponent as `V_a = Z @ coeffs_a` — a plain matrix product, so the tesseral-harmonic
-  convention stays owned by Julia (`SCEFitting.Harmonics`) and is never re-implemented here.
+  convention stays owned by Julia (`SLCE.Harmonics`) and is never re-implemented here.
 - `grid.weight` — the equal-solid-angle quadrature weight `4π / npoints` (no `sinθ`
   factor). Densities are normalized so `Σ_i P_i · weight = 1`.
 - `frames[t].coeffs` — per-atom coefficient vectors `c_a` (length `(lmax+1)²`) at

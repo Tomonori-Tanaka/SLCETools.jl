@@ -1,7 +1,7 @@
 # Monte-Carlo sampling
 
 ```@meta
-CurrentModule = SCETools
+CurrentModule = SLCETools
 ```
 
 [`MetropolisSampler`](@ref) is the joint-Boltzmann sibling of the mean-field
@@ -21,7 +21,7 @@ correlation the MC sampler exists to keep.*
 ## Construction and the `sample` verb
 
 ```julia
-mc = MetropolisSampler(model)                       # model::SCEPredictor
+mc = MetropolisSampler(model)                       # model::SLCEModel
 mc = MetropolisSampler(model; reference)            # reference = default chain start
 
 # n configurations at one absolute temperature — in kelvin, or as k_B·T in eV
@@ -36,7 +36,7 @@ Unlike the mean-field sampler there is **no reduced temperature** — the contro
 absolute, under exactly one of two keywords (so a kelvin value can never be silently
 read as an energy):
 
-- `temperature` — kelvin, converted internally with `SCETools.KB_EV`
+- `temperature` — kelvin, converted internally with `SLCETools.KB_EV`
   (``k_B = 8.617 \times 10^{-5}`` eV/K). This assumes the model's energy unit is eV —
   the package-wide convention for DFT-fitted models.
 - `kT` — ``k_B T`` directly in the model's energy units. Use this for theoretical runs
@@ -79,7 +79,7 @@ The single-temperature form — production sampling at one physical temperature,
 generating anisotropy training configurations from an isotropic fit:
 
 ```julia
-using SCETools, Random, Statistics
+using SLCETools, Random, Statistics
 
 reference = ...                        # 3 × n_atoms unit columns (the ground state)
 mc = MetropolisSampler(model; reference = reference)
@@ -137,7 +137,7 @@ configurations) with MC-native labels:
 |---|---|
 | `.configs` | `Vector` of `3 × n_atoms` configurations (unit columns) |
 | `.kT` | each configuration's ``k_B T`` in the model's energy units |
-| `.temperature` | the same in kelvin (`= kT / SCETools.KB_EV`; assumes an eV model) |
+| `.temperature` | the same in kelvin (`= kT / SLCETools.KB_EV`; assumes an eV model) |
 | `.energy` | that configuration's SCE energy (model units, `j0` excluded) |
 | `.acceptance` | Metropolis accept fraction over the sweeps that produced it |
 

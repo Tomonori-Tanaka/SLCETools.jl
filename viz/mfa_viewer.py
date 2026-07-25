@@ -7,7 +7,7 @@ with Plotly's WebGL backend (no native VTK window), so it is portable and avoids
 ``Segmentation fault: 11`` that native VTK interactors hit on some setups.
 
 Reads a ``scetools/mfa-distributions`` JSON (written by ``write_mfa_distributions`` in
-SCETools.jl) and uses the stored basis matrix ``Z`` to recover each atom's density as
+SLCETools.jl) and uses the stored basis matrix ``Z`` to recover each atom's density as
 ``exp(-Z @ c_a)`` (a matrix product; the tesseral-harmonic convention stays owned by Julia).
 
 Usage:

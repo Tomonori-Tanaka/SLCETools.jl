@@ -1,12 +1,12 @@
-# SCETools.jl
+# SLCETools.jl
 
 ```@meta
-CurrentModule = SCETools
+CurrentModule = SLCETools
 ```
 
 Auxiliary tooling around the spin-cluster-expansion (SCE) fitting core
-[SCEFitting.jl](https://github.com/Tomonori-Tanaka/SCEFitting.jl) — utilities that
-**consume** a fitted `SCEPredictor` rather than build one.
+[SLCE.jl](https://github.com/Tomonori-Tanaka/SLCE.jl) — utilities that
+**consume** a fitted `SLCEModel` rather than build one.
 
 The first component is the **mean-field (MFA) spin-configuration sampler**: draw physically
 representative finite-temperature spin configurations from the single-site mean field of a
@@ -16,10 +16,10 @@ enrich an SCE training set, which is why sampling and (planned) active learning 
 together.
 
 !!! note "Status — companion to an architectural exploration (v0)"
-    SCETools depends on SCEFitting and reads a fitted model **only** through its public
-    introspection surface — [`multipole_terms`](https://github.com/Tomonori-Tanaka/SCEFitting.jl),
-    `bilinear_terms`, `n_atoms`, and the tesseral submodule `SCEFitting.Harmonics` —
-    never its SALC-basis internals. The sampler was developed inside SCEFitting (phases
+    SLCETools depends on SLCE and reads a fitted model **only** through its public
+    introspection surface — [`multipole_terms`](https://github.com/Tomonori-Tanaka/SLCE.jl),
+    `bilinear_terms`, `n_atoms`, and the tesseral submodule `SLCE.Harmonics` —
+    never its SALC-basis internals. The sampler was developed inside SLCE (phases
     P0–P4) and extracted here when the core was narrowed to fitting only.
 
 ## The sampler at a glance
@@ -32,10 +32,10 @@ fidelity:
 | `MFASampler(reference)` | a single global magnetization | Langevin / von Mises–Fisher |
 | `MFASampler(ExchangeModel(Jiso); reference)` | multi-sublattice isotropic (Heisenberg) exchange | per-atom von Mises–Fisher |
 | `MFASampler(ExchangeModel(bilinear; onsite); reference)` | tensorial exchange (DMI + anisotropic) + single-ion | von Mises–Fisher / Bingham (Metropolis) |
-| `MFASampler(model::SCEPredictor; reference)` | **all** SCE clusters and `l` — higher-order / many-body | full multipole (Metropolis) |
+| `MFASampler(model::SLCEModel; reference)` | **all** SCE clusters and `l` — higher-order / many-body | full multipole (Metropolis) |
 
 The [`ExchangeModel`](@ref) carrier can be built by hand (raw couplings, or a TB2J-style
-``J_{ij}`` tensor) or extracted from a fitted `SCEPredictor`; the full
+``J_{ij}`` tensor) or extracted from a fitted `SLCEModel`; the full
 [`MultipoleModel`](@ref) path keeps every channel.
 
 ## Documentation
@@ -44,7 +44,7 @@ The [`ExchangeModel`](@ref) carrier can be built by hand (raw couplings, or a TB
 |------|--------------|
 | [Getting started](getting_started.md) | Install, then sample a Heisenberg dimer from a fitted model |
 | [Guide: sampling](guide/sampling.md) | The `sample` verb, the fidelity ladder, `MFASample`, the τ ↔ m helpers |
-| [Guide: exchange models](guide/exchange_models.md) | Building an `ExchangeModel` by hand or from a fitted `SCEPredictor` |
+| [Guide: exchange models](guide/exchange_models.md) | Building an `ExchangeModel` by hand or from a fitted `SLCEModel` |
 | [Guide: VASP I/O](guide/vasp.md) | Read DFT training data (POSCAR / OSZICAR) and write constrained-noncollinear INCAR / input sets |
 | [Guide: orientation distributions](guide/distributions.md) | Export the per-atom single-site distributions for the interactive sphere viewer |
 | [Theory: the mean-field sampler](theory/mfa.md) | The MFA decoupling, reduced temperature, vMF / Bingham single-site laws |
@@ -52,7 +52,7 @@ The [`ExchangeModel`](@ref) carrier can be built by hand (raw couplings, or a TB
 
 ## Relationship to the ecosystem
 
-This package re-founds the sampling / active-learning layer on the clean SCEFitting
+This package re-founds the sampling / active-learning layer on the clean SLCE
 rebuild. The older `SpinClusterMC.jl` (Monte Carlo) and `ActiveSCE.jl` (active learning)
 packages remain in use against the original `Magesty.jl` and are not targeted here.
 

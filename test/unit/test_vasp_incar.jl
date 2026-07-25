@@ -1,15 +1,15 @@
-# VASP input writing (src/io/vasp.jl, module SCETools.VASP): sampled spin directions →
+# VASP input writing (src/io/vasp.jl, module SLCETools.VASP): sampled spin directions →
 # constrained-noncollinear INCAR / full input sets. Gates: MAGMOM = magmom · direction with the
 # right formatting and atom order (matching write_poscar's species grouping), template
 # passthrough, the magnitude sources, the SAXIS frame round-trip, and the constraint block.
 
 using Test
-using SCEFitting
-using SCETools
+using SLCE
+using SLCETools
 using LinearAlgebra
 using Random
 
-const V = SCETools.VASP
+const V = SLCETools.VASP
 
 # Read a tag's flat float list back from a written INCAR (honours the `n*v` repeat syntax).
 function incar_floats(path, key)

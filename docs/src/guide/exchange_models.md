@@ -1,13 +1,13 @@
 # Exchange models
 
 ```@meta
-CurrentModule = SCETools
+CurrentModule = SLCETools
 ```
 
 [`ExchangeModel`](@ref) is the neutral carrier of the **bilinear** exchange (and single-ion
 anisotropy) the mean-field sampler needs. [`MultipoleModel`](@ref) is its higher-order
 generalization, keeping **all** SCE channels. Both can be built by hand or extracted from a
-fitted `SCEPredictor`.
+fitted `SLCEModel`.
 
 ## Building an `ExchangeModel` by hand
 
@@ -28,7 +28,7 @@ ExchangeModel(bilinear::AbstractMatrix{<:SMatrix{3,3}}; onsite = nothing)
 with the directed bond matrices satisfying ``S_{ba} = S_{ab}'``.
 
 ```julia
-using SCETools, StaticArrays, LinearAlgebra
+using SLCETools, StaticArrays, LinearAlgebra
 
 # A two-sublattice antiferromagnet: J > 0 couples atoms 1 and 2.
 J    = 0.01
@@ -49,7 +49,7 @@ A purely isotropic model (`isotropic = true`) takes the fast closed-form von Mis
 path; any DMI, anisotropic, or single-ion content switches the sampler to the Bingham /
 Metropolis path automatically.
 
-## Extracting from a fitted `SCEPredictor`
+## Extracting from a fitted `SLCEModel`
 
 The bilinear and single-ion channels of a fitted model fold into an `ExchangeModel`:
 
@@ -60,14 +60,14 @@ exch = ExchangeModel(model)        # ls=[1,1] bilinear + ls=[2] single-ion
 Only those two channels are representable as a bilinear model; any higher-order / higher-`l`
 SALCs are dropped and reported via `@warn`. To keep **every** channel, use the full multipole
 model (`MultipoleModel` is public but unexported — qualify it, or
-`using SCETools: MultipoleModel`):
+`using SLCETools: MultipoleModel`):
 
 ```julia
-mf = SCETools.MultipoleModel(model)  # all clusters and l, higher-order / many-body
-s  = MFASampler(model; reference)    # ≡ MFASampler(SCETools.MultipoleModel(model); reference)
+mf = SLCETools.MultipoleModel(model)  # all clusters and l, higher-order / many-body
+s  = MFASampler(model; reference)    # ≡ MFASampler(SLCETools.MultipoleModel(model); reference)
 ```
 
-Both extractions read the fitted model through SCEFitting's public introspection surface
+Both extractions read the fitted model through SLCE's public introspection surface
 (`multipole_terms`, `bilinear_terms`) — never its SALC-basis internals — so they are insulated
 from the core's basis representation.
 

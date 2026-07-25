@@ -1,9 +1,9 @@
 """
-    SCETools
+    SLCETools
 
 Auxiliary tooling around the spin-cluster-expansion (SCE) fitting core
-[`SCEFitting`](https://github.com/Tomonori-Tanaka/SCEFitting.jl): utilities that
-*consume* a fitted `SCEPredictor`
+[`SLCE`](https://github.com/Tomonori-Tanaka/SLCE.jl): utilities that
+*consume* a fitted `SLCEModel`
 rather than build one. The first component is the **mean-field (MFA) spin-configuration
 sampler** — draw physically representative finite-temperature spin configurations from the
 single-site mean field of a fitted model (or a hand-built exchange model) at a controlled
@@ -12,13 +12,13 @@ Monte-Carlo sampler** (`MetropolisSampler`) — correlated configurations at an 
 temperature `k_B·T`. Future components (active learning, configuration / diagnostic
 helpers) live alongside them.
 
-The package reads the fitted Hamiltonian only through `SCEFitting`'s public
+The package reads the fitted Hamiltonian only through `SLCE`'s public
 introspection surface (`multipole_terms`, `bilinear_terms`, and the tesseral-harmonic
-submodule `SCEFitting.Harmonics`), never its SALC-basis internals.
+submodule `SLCE.Harmonics`), never its SALC-basis internals.
 
 See `docs/specs/mfa-sampling.md` for the sampler design.
 """
-module SCETools
+module SLCETools
 
 using LinearAlgebra: norm, I, eigen, Symmetric, dot, cross, mul!
 using StaticArrays
@@ -29,8 +29,8 @@ using Random: AbstractRNG, default_rng
 # surface (so the sampler never reaches into the SALC-basis internals). `Harmonics` is the
 # core's tesseral spherical-harmonic kernel, imported so the moved sampler files keep their
 # `Harmonics.Zlm` / `Harmonics.lm_index` calls unchanged.
-import SCEFitting.Harmonics
-using SCEFitting: SCEPredictor, n_atoms, multipole_terms, MultipoleTerm, bilinear_terms,
+import SLCE.Harmonics
+using SLCE: SLCEModel, n_atoms, multipole_terms, MultipoleTerm, bilinear_terms,
     Crystal
 
 # --- mean-field spin-configuration sampling (docs/specs/mfa-sampling.md) ---
@@ -56,7 +56,7 @@ include("mfa/bridge.jl")
 # engine's proposal primitives. Kept in its own directory as a future extraction seam.
 include("mc/metropolis.jl")
 
-# The VASP adapter (`SCETools.VASP`): OSZICAR/POSCAR reading into `SpinDatum`s and
+# The VASP adapter (`SLCETools.VASP`): OSZICAR/POSCAR reading into `SpinDatum`s and
 # constrained-noncollinear INCAR / input-set writing. Namespaced as a submodule, so it
 # does not grow the top-level export list (a second DFT code would be a sibling).
 include("io/vasp.jl")
@@ -81,7 +81,7 @@ export mfa_temperature_scale, mfa_sublattice_m, thermal_averaged_m, tau_from_mag
 export SiteDistributionField, mfa_site_coefficients, write_mfa_distributions
 
 # --- Public, unexported -----------------------------------------------------------
-# Reachable as `SCETools.<name>` (and documented), but kept out of the flat `using`
+# Reachable as `SLCETools.<name>` (and documented), but kept out of the flat `using`
 # namespace. The headline workflow (`MFASampler` / `sample` / `ExchangeModel` /
 # `write_mfa_distributions`) already drives them; power users and the test suite reach
 # them by qualification. Declared with the `public` keyword so the tier is
@@ -91,4 +91,4 @@ public KB_EV                                # Boltzmann constant, eV/K (kelvin �
 public SphereGrid, fibonacci_sphere, harmonic_basis, site_probabilities  # viz plumbing
 public MeanFieldEngine, VASP                # engine kernels / the VASP adapter submodule
 
-end # module SCETools
+end # module SLCETools

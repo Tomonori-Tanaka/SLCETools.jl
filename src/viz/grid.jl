@@ -2,7 +2,7 @@
 #
 # The viewer turns each atom's coefficient vector `c_a` into a per-direction density with a
 # single matrix product against a shared basis matrix `Z[i,k] = Z_lm(e_i)` that this module
-# evaluates once (so the harmonic convention stays owned by `SCEFitting.Harmonics`; Python
+# evaluates once (so the harmonic convention stays owned by `SLCE.Harmonics`; Python
 # never re-implements `Z_lm`). The companion compute (`mfa_site_coefficients`,
 # `site_probabilities`) lives in `distributions.jl`, the JSON document in `serialize.jl`.
 

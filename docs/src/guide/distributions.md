@@ -1,10 +1,10 @@
 # Orientation distributions & visualization
 
 ```@meta
-CurrentModule = SCETools
+CurrentModule = SLCETools
 ```
 
-Besides *drawing* configurations with [`sample`](@ref), SCETools can export the per-atom
+Besides *drawing* configurations with [`sample`](@ref), SLCETools can export the per-atom
 **single-site orientation distribution** itself — the probability of each spin pointing in a
 given direction — at one or more reduced temperatures ``\tau``, for an interactive 3D
 viewer. The single-site law is
@@ -24,8 +24,8 @@ The one verb is [`write_mfa_distributions`](@ref): give it a sampler, the
 `crystal` it was built for, and the temperatures to sweep.
 
 ```julia
-using SCETools
-using SCETools.VASP: read_poscar
+using SLCETools
+using SLCETools.VASP: read_poscar
 
 crystal = read_poscar("POSCAR")
 sampler = MFASampler(model; reference)          # any sampler (isotropic … full multipole)
@@ -49,9 +49,9 @@ To turn coefficients into a coloured surface without re-implementing the harmoni
 Python, the file also carries a **shared basis matrix** ``Z[i,k] = Z_{lm}(\boldsymbol e_i)``
 evaluated once by Julia on the render grid. The viewer recovers each atom's density with a
 single matrix product ``V_a = Z\,c_a`` followed by ``\exp(-V_a)`` — the tesseral-harmonic
-convention stays owned by [`SCEFitting.Harmonics`](https://github.com/Tomonori-Tanaka/SCEFitting.jl)
+convention stays owned by [`SLCE.Harmonics`](https://github.com/Tomonori-Tanaka/SLCE.jl)
 and is never duplicated. The full JSON schema (`scetools/mfa-distributions`, version 1) is
-documented in [`viz/README.md`](https://github.com/Tomonori-Tanaka/SCETools.jl/blob/main/viz/README.md).
+documented in [`viz/README.md`](https://github.com/Tomonori-Tanaka/SLCETools.jl/blob/main/viz/README.md).
 
 ```@docs
 write_mfa_distributions
@@ -75,9 +75,9 @@ sliders control the **temperature** ``\tau`` and the **arrow size**.
 Useful flags: `--scale S` bulges the sphere out along the distribution's lobes (default
 `0` = a true sphere coloured only by ``P``); `--head-frac F` sets the arrow head fraction
 (default `0.5`); `--shared-clim`, `--no-triad`, `--grid-axes`, `--no-cell`, `--no-arrows`,
-`--no-open`. See [`viz/README.md`](https://github.com/Tomonori-Tanaka/SCETools.jl/blob/main/viz/README.md).
+`--no-open`. See [`viz/README.md`](https://github.com/Tomonori-Tanaka/SLCETools.jl/blob/main/viz/README.md).
 
-The runnable demo [`examples/mfa_distributions.jl`](https://github.com/Tomonori-Tanaka/SCETools.jl/blob/main/examples/mfa_distributions.jl)
+The runnable demo [`examples/mfa_distributions.jl`](https://github.com/Tomonori-Tanaka/SLCETools.jl/blob/main/examples/mfa_distributions.jl)
 builds a 2-atom antiferromagnet and writes the sweep; its τ range and grid resolution are
 optional command-line arguments:
 
@@ -92,8 +92,8 @@ python viz/mfa_viewer.py examples/mfa_distributions.json
 composes. [`mfa_site_coefficients`](@ref) and [`SiteDistributionField`](@ref) are exported;
 the render plumbing [`fibonacci_sphere`](@ref), [`SphereGrid`](@ref),
 [`harmonic_basis`](@ref), and [`site_probabilities`](@ref) is **public but unexported** —
-reach it by qualification (`SCETools.fibonacci_sphere`) or an explicit
-`using SCETools: fibonacci_sphere, SphereGrid, harmonic_basis, site_probabilities`.
+reach it by qualification (`SLCETools.fibonacci_sphere`) or an explicit
+`using SLCETools: fibonacci_sphere, SphereGrid, harmonic_basis, site_probabilities`.
 
 ```@docs
 mfa_site_coefficients

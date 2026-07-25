@@ -1,7 +1,7 @@
 using Test
-using SCEFitting
-using SCETools
-using SCETools.VASP: read_poscar, write_poscar, Oszicar
+using SLCE
+using SLCETools
+using SLCETools.VASP: read_poscar, write_poscar, Oszicar
 using LinearAlgebra
 using StaticArrays
 
@@ -149,18 +149,18 @@ end
         @test_throws ArgumentError SpinDatum(0.0, [1.0; 2.0;;], [1.0; 2.0;;])   # not 3×n
     end
 
-    @testset "DFT-source seam → SCEDataset (code-agnostic)" begin
+    @testset "DFT-source seam → SLCEDataset (code-agnostic)" begin
         c = read_poscar(_write(dir, "POSCAR_ds",
             "FeFe\n1.0\n 3 0 0\n 0 3 0\n 0 0 3\nFe\n2\nDirect\n 0 0 0\n 0.5 0 0\n"))
-        basis = SCEBasis(c, BasisSpec(; nbody = 2, cutoff = 2.0, lmax = [2], isotropy = false))
+        basis = SLCEBasis(c, BasisSpec(; nbody = 2, cutoff = 2.0, lmax = [2], isotropy = false))
         src = Oszicar([_write(dir, "OSZICAR_d1", _oszicar_text()),
                        _write(dir, "OSZICAR_d2", _oszicar_text(energy_free = "-.80000000E+02"))])
         data = read_configs(src)
-        ds = SCEDataset(basis, src)                         # straight from the source
+        ds = SLCEDataset(basis, src)                         # straight from the source
         @test has_torque(ds)
         @test ds.y_E ≈ [d.energy for d in data]
         @test ds.configs[1] == data[1].directions           # configs are the spin directions
-        ds_e = SCEDataset(basis, data; use_torque = false)
+        ds_e = SLCEDataset(basis, data; use_torque = false)
         @test !has_torque(ds_e)
         @test ds_e.y_E ≈ ds.y_E
     end
@@ -191,12 +191,12 @@ end
         @test read_poscar(pc).frac_positions ≈ c.frac_positions
 
         # unconstrained data (zero field) → zero torque → use_torque=true is rejected
-        basis = SCEBasis(c, BasisSpec(; nbody = 2, cutoff = 2.0, lmax = [1], isotropy = true))
+        basis = SLCEBasis(c, BasisSpec(; nbody = 2, cutoff = 2.0, lmax = [1], isotropy = true))
         uc = read_configs(Oszicar(_write(dir, "OSZICAR_uc",
             _oszicar_text(field = [(0.0, 0, 0), (0.0, 0, 0)]))))
         @test all(t -> all(iszero, t), [d.torques for d in uc])
-        @test_throws ArgumentError SCEDataset(basis, uc; use_torque = true)
-        @test !has_torque(SCEDataset(basis, uc; use_torque = false))
+        @test_throws ArgumentError SLCEDataset(basis, uc; use_torque = true)
+        @test !has_torque(SLCEDataset(basis, uc; use_torque = false))
     end
     @testset "Oszicar rejects an unknown energy_kind" begin
         @test_throws ArgumentError Oszicar(["nonexistent"]; energy_kind = :bogus)
