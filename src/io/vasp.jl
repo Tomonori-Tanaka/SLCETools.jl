@@ -1,10 +1,10 @@
 # VASP I/O — the code-specific adapter for the VASP DFT code, kept out of the code-agnostic
 # fitting core. The core (`SLCE`) owns only the abstract DFT-data seam
-# (`AbstractDFTSource` / `SpinDatum` / `read_configs` / `SLCEDataset`); this module provides the
+# (`AbstractDFTSource` / `TrainingDatum` / `read_configs` / `SLCEDataset`); this module provides the
 # concrete VASP reader and writer:
 #
 #   - read:  `read_poscar` (POSCAR → Crystal), `Oszicar` (constrained-noncollinear OSZICARs →
-#            SpinDatum via the `AbstractDFTSource` / `read_configs` seam) — produces training data.
+#            spin-only TrainingDatum via the `AbstractDFTSource` / `read_configs` seam) — produces training data.
 #   - write: `write_poscar` (Crystal → POSCAR), `write_incar` / `write_inputs` (sampled spin
 #            directions → constrained-noncollinear INCAR / input sets) — produces DFT jobs.
 #
@@ -21,7 +21,8 @@ module VASP
 using Printf
 using StaticArrays
 using LinearAlgebra: norm, det
-using SLCE: Crystal, Lattice, AbstractDFTSource, SpinDatum, n_atoms
+using SLCE: Crystal, Lattice, AbstractDFTSource, TrainingDatum, DatumProvenance,
+            SpinDatum, n_atoms
 import SLCE: read_configs
 
 export read_poscar, write_poscar, Oszicar, write_incar, write_inputs
@@ -170,11 +171,24 @@ end
 # ── OSZICAR (constrained-noncollinear training data) ──────────────────────────────────
 
 """
-    SLCETools.VASP.Oszicar(paths; saxis = [0, 0, 1], energy_kind = :free, mint = false)
+    SLCETools.VASP.Oszicar(paths; saxis = [0, 0, 1], energy_kind = :free, mint = false,
+                           setup_id = nothing)
 
-An `AbstractDFTSource` over one or more VASP OSZICAR files — each contributes one `SpinDatum`
-(in the given order, through `SLCE.read_configs`). `paths` may be a single path or a
-vector.
+An `AbstractDFTSource` over one or more VASP OSZICAR files — each contributes one
+spin-only `TrainingDatum` (in the given order, through `SLCE.read_configs`). `paths`
+may be a single path or a vector.
+
+A file **without** a `lambda*MW_perp` block (an unconstrained run) produces a datum
+with `field = torques = nothing` — "not computed", NOT a fabricated all-zero field
+(a present zero field would claim `τ = 0` was observed, which an unconstrained
+file cannot certify; SLCE's `torque_qualified` derivation relies on this
+distinction). A file **with** the block gets the field with zeros exactly on the
+atoms the run left unconstrained — those atoms' `τ = 0` rows ARE admitted with the
+config: an unconstrained moment in an otherwise constrained, converged SCF has
+relaxed parallel to its local effective field, so its zero torque is a genuine
+per-atom observation (the per-config `torque_qualified` gate refuses exactly the
+claim this per-atom case is allowed to make — a whole run whose convergence the
+file cannot certify).
 
 # Keyword arguments
 - `saxis`: the `SAXIS` quantization axis; moments and fields are rotated from this frame into
@@ -183,20 +197,25 @@ vector.
 - `mint`: read the moment from the `M_int` columns instead of `MW_int`. The constraining field
   `lambda*MW_perp` is referenced to the `MW_int` moment, so the default `mint = false` keeps the
   moment and field (hence the torque) mutually consistent.
+- `setup_id`: computational-setup label stamped into every datum's `DatumProvenance`
+  (one `SLCEDataset` accepts a single setup; tag your families when mixing sources).
 """
 struct Oszicar <: AbstractDFTSource
     paths::Vector{String}
     saxis::SVector{3,Float64}
     energy_kind::Symbol
     mint::Bool
+    setup_id::Union{String,Nothing}
 end
 
 function Oszicar(paths::AbstractVector{<:AbstractString};
                 saxis = SVector{3,Float64}(0, 0, 1),
-                energy_kind::Symbol = :free, mint::Bool = false)
+                energy_kind::Symbol = :free, mint::Bool = false,
+                setup_id::Union{AbstractString,Nothing} = nothing)
     energy_kind in (:free, :sigma0) ||
         throw(ArgumentError("energy_kind must be :free or :sigma0; got $(repr(energy_kind))"))
-    return Oszicar(collect(String, paths), SVector{3,Float64}(saxis), energy_kind, mint)
+    return Oszicar(collect(String, paths), SVector{3,Float64}(saxis), energy_kind, mint,
+                   setup_id === nothing ? nothing : String(setup_id))
 end
 Oszicar(path::AbstractString; kwargs...) = Oszicar([path]; kwargs...)
 
@@ -247,16 +266,22 @@ function _oszicar_energy_moments(path::AbstractString, energy_kind::Symbol, mint
 end
 
 # Per-atom constraining field (3 × n_atoms) from the `lambda*MW_perp` block; rows are
-# `idx Bx By Bz`, only for constrained atoms (others stay zero). The last block wins; a missing
-# block (unconstrained run) yields a zero field.
-function _oszicar_field(path::AbstractString, nat::Int)::Matrix{Float64}
+# `idx Bx By Bz`, only for constrained atoms (others stay zero). The last block wins. A
+# file with NO block at all (unconstrained run) returns `nothing` — the field was not
+# computed, which is a different object from a computed all-zero field (SLCE's
+# `torque_qualified` provenance derivation depends on the distinction; fabricating
+# zeros here would inject false τ = 0 targets into a co-fit).
+function _oszicar_field(path::AbstractString, nat::Int)::Union{Matrix{Float64},Nothing}
     field = zeros(3, nat)
     tmp = zeros(3, nat)
     in_block = false
     got = false
+    seen = false
+    anygot = false
     for line in eachline(path)
         if occursin("lambda*MW_perp", line)
             in_block = true
+            seen = true
             fill!(tmp, 0.0)
             got = false
             continue
@@ -269,6 +294,7 @@ function _oszicar_field(path::AbstractString, nat::Int)::Matrix{Float64}
                 tmp[2, idx] = parse(Float64, p[3])
                 tmp[3, idx] = parse(Float64, p[4])
                 got = true
+                anygot = true
                 continue
             else
                 in_block = false
@@ -277,17 +303,33 @@ function _oszicar_field(path::AbstractString, nat::Int)::Matrix{Float64}
         end
     end
     in_block && got && (field .= tmp)                   # block running at EOF
-    return field
+    if seen && !anygot
+        # A `lambda*MW_perp` header with no parseable rows: a malformed/renamed block
+        # format would otherwise be indistinguishable from a computed-and-zero field.
+        @warn "OSZICAR has lambda*MW_perp block(s) but no parseable field rows — " *
+              "treating as computed-and-zero; if the block format changed, this is " *
+              "a parser drift" path
+    end
+    return seen ? field : nothing
 end
 
-function read_configs(src::Oszicar)::Vector{SpinDatum}
+function read_configs(src::Oszicar)::Vector{TrainingDatum}
     R = _saxis_rotation(src.saxis)
-    data = Vector{SpinDatum}(undef, length(src.paths))
+    data = Vector{TrainingDatum}(undef, length(src.paths))
     for (i, path) in enumerate(src.paths)
         isfile(path) || throw(ArgumentError("OSZICAR not found: $path"))
         energy, moments = _oszicar_energy_moments(path, src.energy_kind, src.mint)
         field = _oszicar_field(path, size(moments, 2))
-        data[i] = SpinDatum(energy, R * moments, R * field)   # SAXIS → Cartesian frame
+        if field === nothing
+            prov = DatumProvenance(; setup_id = src.setup_id)
+            data[i] = SpinDatum(energy, R * moments; provenance = prov)
+        else
+            c = any(!iszero, field)          # same derivation as SpinDatum's default
+            prov = DatumProvenance(; constrained = c, torque_qualified = c,
+                                   setup_id = src.setup_id)
+            # SAXIS → Cartesian frame (spin channels only)
+            data[i] = SpinDatum(energy, R * moments, R * field; provenance = prov)
+        end
     end
     return data
 end

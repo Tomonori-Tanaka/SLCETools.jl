@@ -20,7 +20,7 @@ Auxiliary tooling around the spin-cluster-expansion (SCE) fitting core
   per τ frame, temperature slider — see `viz/README.md`).
 - **VASP I/O** *(available)* — `SLCETools.VASP` is the concrete VASP adapter (the fitting core
   keeps only the abstract DFT-data seam): **read** training data (`read_poscar`, `Oszicar` →
-  `SpinDatum`) and **write** constrained-noncollinear inputs from sampled configurations
+  spin-only `TrainingDatum`s) and **write** constrained-noncollinear inputs from sampled configurations
   (`write_incar` / `write_inputs`). Read and write share one frame / format convention.
 - **Active learning** *(planned)* — an efficient model-construction loop that proposes
   configurations (via the sampler), labels them with DFT, and refits the SCE model. See

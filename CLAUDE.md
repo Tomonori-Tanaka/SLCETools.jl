@@ -84,12 +84,17 @@ Inherited from the core (`SLCE`'s `CLAUDE.md`); the ones this package leans on:
   always agree (template SAXIS honoured / overridden together). (2) **Atom order** —
   `_poscar_order` must reproduce `write_poscar`'s species grouping exactly, or `write_inputs`
   silently misassigns moments to atoms. (3) **MAGMOM = magnitude · direction**, M_CONSTR ==
-  MAGMOM under `constrain`. (4) The **torque sign / SpinDatum layout** is owned upstream by
+  MAGMOM under `constrain`. (4) The **torque sign / TrainingDatum layout** is owned upstream by
   `SLCE`'s `dftsource.jl` (`τ_a = m_a × B_a`); the OSZICAR reader must keep producing
-  that. Gates: `test/unit/test_vaspio.jl` (read), `test/unit/test_vasp_incar.jl` (write,
-  round-trip / order / formatting), `test/oracle/` (parsers vs Magesty bit-for-bit). The sampler
-  gives only directions + an order parameter `m_a ∈ [0,1]`, **not** μ_B magnitudes — the write
-  magnitudes are an external input.
+  that. (5) **Absent ≠ zero**: an OSZICAR with no `lambda*MW_perp` block yields
+  `field = nothing` (2-arg `SpinDatum`, `torque_qualified = false`) — never a fabricated
+  zero-filled field, which would claim `τ = 0` was observed and admit false torque rows
+  into a co-fit; a present block with zero rows means "computed, those atoms
+  unconstrained". `Oszicar(...; setup_id = ...)` stamps the computational-setup label
+  (`SLCEDataset` rejects cross-setup mixtures). Gates: `test/unit/test_vaspio.jl` (read),
+  `test/unit/test_vasp_incar.jl` (write, round-trip / order / formatting), `test/oracle/`
+  (parsers vs Magesty bit-for-bit). The sampler gives only directions + an order parameter
+  `m_a ∈ [0,1]`, **not** μ_B magnitudes — the write magnitudes are an external input.
 
 ## Tests
 

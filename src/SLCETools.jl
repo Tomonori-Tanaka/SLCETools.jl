@@ -56,7 +56,7 @@ include("mfa/bridge.jl")
 # engine's proposal primitives. Kept in its own directory as a future extraction seam.
 include("mc/metropolis.jl")
 
-# The VASP adapter (`SLCETools.VASP`): OSZICAR/POSCAR reading into `SpinDatum`s and
+# The VASP adapter (`SLCETools.VASP`): OSZICAR/POSCAR reading into `TrainingDatum`s and
 # constrained-noncollinear INCAR / input-set writing. Namespaced as a submodule, so it
 # does not grow the top-level export list (a second DFT code would be a sibling).
 include("io/vasp.jl")

@@ -21,7 +21,7 @@ const MR = SLCETools
 function _biquadratic_model(seed)
     lat = Lattice(Matrix(3.0 * I(3)))
     cr = Crystal(lat, [0.2 -0.2; 0.0 0.0; 0.0 0.0], [1, 1], ["Fe"])
-    b = SLCEBasis(cr, BasisSpec(; nbody = 2, cutoff = 1.5, lmax = [2], isotropy = false))
+    b = SLCEBasis(cr, BasisSpec(; nbody = 2, cutoff = 1.5, lmax = [2], soc = true))
     return SLCEModel(b, 0.0, 0.05 .* randn(MersenneTwister(seed), n_salcs(b)))
 end
 
@@ -29,7 +29,7 @@ end
 function _dimer_model()
     lat = Lattice([8.0 0 0; 0 8.0 0; 0 0 10.0])
     cr = Crystal(lat, [0 0 0 0; 0 0 0 0; 0.0 0.25 0.5 0.75], [1, 1, 1, 1], ["Fe"])
-    b = SLCEBasis(cr, BasisSpec(; nbody = 2, cutoff = 2.6, lmax = [1], isotropy = true))
+    b = SLCEBasis(cr, BasisSpec(; nbody = 2, cutoff = 2.6, lmax = [1], soc = false))
     # only the first SALC (the 1-2 bond orbit) is nonzero: a clean coupled dimer
     return SLCEModel(b, 0.0, vcat([-0.02], zeros(n_salcs(b) - 1)))   # negative ⇒ ferro
 end

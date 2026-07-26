@@ -6,6 +6,20 @@ release, so everything lives under *Unreleased*.
 
 ## [Unreleased]
 
+### Changed — sync to SLCE's `TrainingDatum` data layer (BREAKING upstream)
+
+- The OSZICAR reader follows SLCE's `SpinDatum`-type → `TrainingDatum` replacement:
+  `read_configs(::Oszicar) -> Vector{TrainingDatum}`. **Absent ≠ zero**: an OSZICAR
+  with no `lambda*MW_perp` block now yields `field = torques = nothing` (the field
+  was not computed — previously a fabricated zero-filled field, which would have
+  claimed an observed `τ = 0` and admitted false torque rows once mixed datasets
+  became legal); a present block with zero rows still means "computed, those atoms
+  unconstrained". Provenance is stamped per datum (`constrained`/`torque_qualified`
+  derived from the field block; new `Oszicar(...; setup_id = ...)` keyword labels
+  the computational setup for SLCE's one-setup-per-dataset invariant).
+- Test/example sync for SLCE's `isotropy` → `soc` keyword inversion
+  (`isotropy = true` ⇒ `soc = false` and vice versa; 14 sites).
+
 ### Changed — BREAKING: package renamed SCETools.jl → SLCETools.jl (SLCE family, M0)
 
 - The whole family is renamed to the **spin–lattice cluster expansion (SLCE)**

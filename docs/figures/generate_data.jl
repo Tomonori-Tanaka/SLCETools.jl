@@ -22,7 +22,7 @@ _langevin(x) = coth(x) - 1 / x
 function dimer_model()
     lat = Lattice([8.0 0 0; 0 8.0 0; 0 0 10.0])
     cr = Crystal(lat, [0 0 0 0; 0 0 0 0; 0.0 0.25 0.5 0.75], [1, 1, 1, 1], ["Fe"])
-    b = SLCEBasis(cr, BasisSpec(; nbody = 2, cutoff = 2.6, lmax = [1], isotropy = true))
+    b = SLCEBasis(cr, BasisSpec(; nbody = 2, cutoff = 2.6, lmax = [1], soc = false))
     return SLCEModel(b, 0.0, vcat([-0.02], zeros(n_salcs(b) - 1)))   # negative ⇒ ferro
 end
 
@@ -32,7 +32,7 @@ function cube_model()
     lat = Lattice(Matrix(4.0 * LinearAlgebra.I(3)))
     frac = reduce(hcat, [[i, j, k] ./ 2 for i = 0:1 for j = 0:1 for k = 0:1])
     cr = Crystal(lat, Float64.(frac), ones(Int, 8), ["Fe"])
-    b = SLCEBasis(cr, BasisSpec(; nbody = 2, cutoff = 2.2, lmax = [1], isotropy = true))
+    b = SLCEBasis(cr, BasisSpec(; nbody = 2, cutoff = 2.2, lmax = [1], soc = false))
     return SLCEModel(b, 0.0, fill(-0.02, n_salcs(b)))
 end
 
@@ -97,7 +97,7 @@ function cube64_model()
     lat = Lattice(Matrix(8.0 * LinearAlgebra.I(3)))
     frac = reduce(hcat, [[i, j, k] ./ 4 for i = 0:3 for j = 0:3 for k = 0:3])
     cr = Crystal(lat, Float64.(frac), ones(Int, 64), ["Fe"])
-    b = SLCEBasis(cr, BasisSpec(; nbody = 2, cutoff = 2.2, lmax = [1], isotropy = true))
+    b = SLCEBasis(cr, BasisSpec(; nbody = 2, cutoff = 2.2, lmax = [1], soc = false))
     return SLCEModel(b, 0.0, fill(-0.02, n_salcs(b)))
 end
 model64 = cube64_model()

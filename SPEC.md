@@ -119,7 +119,7 @@ An efficient SCE model-construction loop, closing the sample → label → refit
 1. **Propose** candidate configurations with the MFA sampler at a chosen `τ` (cheap,
    physically representative), optionally targeted by an acquisition criterion.
 2. **Label** them with DFT (write inputs via `SLCETools.VASP`, run an external solver,
-   read back energies / torques as `SpinDatum`).
+   read back energies / torques as spin-only `TrainingDatum`s).
 3. **Refit** the SCE model with `SLCE.fit` / `refit` on the augmented dataset.
 4. **Assess** uncertainty / acquisition and iterate until a target is met.
 

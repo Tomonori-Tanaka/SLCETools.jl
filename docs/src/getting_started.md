@@ -33,7 +33,7 @@ using LinearAlgebra, Random, Statistics
 lat   = Lattice([8.0 0 0; 0 8.0 0; 0 0 10.0])
 frac  = [0 0 0 0; 0 0 0 0; 0.0 0.25 0.5 0.75]
 chain = Crystal(lat, frac, [1, 1, 1, 1], ["Fe"])
-basis = SLCEBasis(chain, BasisSpec(; nbody = 2, cutoff = 2.6, lmax = [1], isotropy = true))
+basis = SLCEBasis(chain, BasisSpec(; nbody = 2, cutoff = 2.6, lmax = [1], soc = false))
 
 # A fitted model: the first SALC (the nearest-neighbour Heisenberg bond) carries a
 # negative coefficient ⇒ ferromagnetic along the reference; the other SALCs stay zero.

@@ -93,7 +93,7 @@ end
     @testset "OSZICAR — energy, moments, field, torque" begin
         p = _write(dir, "OSZICAR1", _oszicar_text())
         d = read_configs(Oszicar(p))[1]
-        @test d isa SpinDatum
+        @test d isa TrainingDatum
         @test d.energy ≈ -84.314080                       # :free → the F= value
         @test d.magmoms ≈ [1.0, 2.0]                      # ‖MW_int‖
         @test d.directions[:, 1] ≈ [1.0, 0.0, 0.0]
@@ -129,11 +129,13 @@ end
         ds = read_configs(Oszicar([p1, p2]))
         @test length(ds) == 2
         @test ds[2].energy ≈ -10.0
-        # no constraint block → zero field → zero torque
+        # no constraint block at all → the field was NOT computed: nothing, not a
+        # fabricated zero matrix (torque rows must not be admitted for this file)
         nofield = " ion   MW_int   M_int\n   1  1.0 0.0 0.0  1.0 0.0 0.0\n   1 F= -.5E+01 E0= -.5E+01 d E = 0\n"
         dn = read_configs(Oszicar(_write(dir, "OSZICAR_nf", nofield)))[1]
-        @test all(iszero, dn.field)
-        @test all(iszero, dn.torques)
+        @test dn.field === nothing
+        @test dn.torques === nothing
+        @test !dn.provenance.torque_qualified && !dn.provenance.constrained
         @test_throws ArgumentError read_configs(Oszicar(joinpath(dir, "nope")))
         @test_throws ArgumentError read_configs(Oszicar(_write(dir, "noE",
             " ion MW_int M_int\n   1 1.0 0.0 0.0 1.0 0.0 0.0\n")))   # no F= line
@@ -152,7 +154,7 @@ end
     @testset "DFT-source seam → SLCEDataset (code-agnostic)" begin
         c = read_poscar(_write(dir, "POSCAR_ds",
             "FeFe\n1.0\n 3 0 0\n 0 3 0\n 0 0 3\nFe\n2\nDirect\n 0 0 0\n 0.5 0 0\n"))
-        basis = SLCEBasis(c, BasisSpec(; nbody = 2, cutoff = 2.0, lmax = [2], isotropy = false))
+        basis = SLCEBasis(c, BasisSpec(; nbody = 2, cutoff = 2.0, lmax = [2], soc = true))
         src = Oszicar([_write(dir, "OSZICAR_d1", _oszicar_text()),
                        _write(dir, "OSZICAR_d2", _oszicar_text(energy_free = "-.80000000E+02"))])
         data = read_configs(src)
@@ -190,14 +192,24 @@ end
         write_poscar(pc, c; cartesian = true)
         @test read_poscar(pc).frac_positions ≈ c.frac_positions
 
-        # unconstrained data (zero field) → zero torque → use_torque=true is rejected
-        basis = SLCEBasis(c, BasisSpec(; nbody = 2, cutoff = 2.0, lmax = [1], isotropy = true))
+        # an explicit all-zero constraint block → field present but zero → the
+        # torque rows are unqualified, so use_torque=true is rejected
+        basis = SLCEBasis(c, BasisSpec(; nbody = 2, cutoff = 2.0, lmax = [1], soc = false))
         uc = read_configs(Oszicar(_write(dir, "OSZICAR_uc",
             _oszicar_text(field = [(0.0, 0, 0), (0.0, 0, 0)]))))
         @test all(t -> all(iszero, t), [d.torques for d in uc])
         @test_throws ArgumentError SLCEDataset(basis, uc; use_torque = true)
         @test !has_torque(SLCEDataset(basis, uc; use_torque = false))
     end
+
+    @testset "Oszicar stamps setup_id into the provenance" begin
+        p = _write(dir, "OSZICAR_sid", _oszicar_text())
+        d = read_configs(Oszicar(p; setup_id = "vasp-ncl-soc"))[1]
+        @test d.provenance.setup_id == "vasp-ncl-soc"
+        @test d.provenance.constrained && d.provenance.torque_qualified
+        @test read_configs(Oszicar(p))[1].provenance.setup_id === nothing
+    end
+
     @testset "Oszicar rejects an unknown energy_kind" begin
         @test_throws ArgumentError Oszicar(["nonexistent"]; energy_kind = :bogus)
     end

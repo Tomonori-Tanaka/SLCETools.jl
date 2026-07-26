@@ -110,7 +110,7 @@ end
         # solve's handling of uncoupled (free) spins.
         lat = Lattice([8.0 0 0; 0 8.0 0; 0 0 10.0])
         cr = Crystal(lat, [0 0 0 0; 0 0 0 0; 0.0 0.25 0.5 0.75], [1, 1, 1, 1], ["Fe"])
-        b = SLCEBasis(cr, BasisSpec(; nbody = 2, cutoff = 2.6, lmax = [1], isotropy = true))
+        b = SLCEBasis(cr, BasisSpec(; nbody = 2, cutoff = 2.6, lmax = [1], soc = false))
         # only the first SALC (the 1-2 bond orbit) carries a coupling; the rest are zero
         model = SLCEModel(b, 0.0, vcat([0.0137], zeros(n_salcs(b) - 1)))
         ex = ExchangeModel(model)
@@ -143,14 +143,14 @@ end
         lat = Lattice(Matrix(3.0 * I(3)))
         # a single-ion (ls=[2]) model: now extracted into onsite (tensorial), not dropped
         cr1 = Crystal(lat, reshape([0.0, 0, 0], 3, 1), [1], ["Fe"])
-        b1 = SLCEBasis(cr1, BasisSpec(; nbody = 1, cutoff = 1.5, lmax = [2], isotropy = false))
+        b1 = SLCEBasis(cr1, BasisSpec(; nbody = 1, cutoff = 1.5, lmax = [2], soc = true))
         m1 = SLCEModel(b1, 0.0, ones(n_salcs(b1)))
         ex1 = ExchangeModel(m1)
         @test !ex1.isotropic
         @test norm(ex1.onsite[1]) > 0
         # higher-l 2-body channels ([1,2], [2,2]) are unsupported and reported
         cr2 = Crystal(lat, [0.2 -0.2; 0.0 0.0; 0.0 0.0], [1, 1], ["Fe"])
-        b2 = SLCEBasis(cr2, BasisSpec(; nbody = 2, cutoff = 1.5, lmax = [2], isotropy = false))
+        b2 = SLCEBasis(cr2, BasisSpec(; nbody = 2, cutoff = 1.5, lmax = [2], soc = true))
         m2 = SLCEModel(b2, 0.0, ones(n_salcs(b2)))
         @test_logs (:warn,) ExchangeModel(m2)
     end

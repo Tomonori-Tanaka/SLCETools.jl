@@ -6,11 +6,11 @@ CurrentModule = SLCETools
 
 `SLCETools.VASP` is the concrete VASP adapter for the SCE workflow — the code-specific I/O the
 fitting core ([SLCE](https://github.com/Tomonori-Tanaka/SLCE.jl)) keeps
-out of itself (the core owns only the abstract `AbstractDFTSource` / `SpinDatum` /
+out of itself (the core owns only the abstract `AbstractDFTSource` / `TrainingDatum` /
 `SLCEDataset` seam). It goes both ways:
 
 - **read** — `read_poscar` (POSCAR → `Crystal`) and `Oszicar` (constrained-noncollinear
-  OSZICARs → `SpinDatum`s) produce *training data* for fitting;
+  OSZICARs → `TrainingDatum`s) produce *training data* for fitting;
 - **write** — `write_poscar`, and `write_incar` / `write_inputs` (sampled spin directions →
   constrained-noncollinear INCAR / input sets) produce *DFT jobs* from sampled configurations.
 
@@ -32,7 +32,7 @@ crystal = read_poscar(joinpath(dir, "POSCAR"))            # → Crystal
 ```
 
 An [`Oszicar`](@ref SLCETools.VASP.Oszicar) wraps one or more constrained-noncollinear OSZICAR
-files as an `AbstractDFTSource`; `SLCE.read_configs` turns it into `SpinDatum`s
+files as an `AbstractDFTSource`; `SLCE.read_configs` turns it into `TrainingDatum`s
 (energy, spin directions, moment magnitudes, constraining field, and the derived torque
 target ``\boldsymbol\tau_a = \boldsymbol m_a \times \boldsymbol B_a``), and `SLCEDataset` goes
 straight from the source to a fit-ready dataset:
