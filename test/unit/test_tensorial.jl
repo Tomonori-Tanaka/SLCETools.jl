@@ -166,4 +166,78 @@ _mean_Z(l, m, configs, a) = mean(_Z(l, m, c[:, a]) for c in configs)
         @test_throws ArgumentError sample(s, 1; tau = 0.5, fixed = [99])
         @test_throws ArgumentError sample(s, 2; tau = -0.1)
     end
+
+    # `_l1_coeffs!` / `_l2_coeffs!` are the FORWARD of the core's `_l1_pair_matrix` /
+    # `_l2_onsite_matrix`, and every other single-ion test in this package feeds them a
+    # DIAGONAL tensor — `diag(1,1,-2)`, `diag(0,0,3)`. On a diagonal `A` four of the five
+    # `l=2` branches are identically zero (`axy = ayz = axz = 0` and `axx − ayy = 0`), so
+    # a swapped `axz ↔ ayz`, a sign flip, or a dropped factor of 2 in `m = ±1, ±2` was
+    # silent everywhere. The path is reachable: a fitted low-symmetry single-ion tensor
+    # flows `bilinear_terms → _extract_bilinear_onsite → onsite[a] → _site_coeffs →
+    # site_potential`, and the visible symptom would be an anisotropy axis pointing the
+    # wrong way — a plausible wrong number, not a crash.
+    #
+    # These pin the writers SEMANTICALLY, against `Zlm` itself, mirroring the core's own
+    # `test_sunny.jl` gate on the inverse direction. A round-trip against
+    # `_l2_onsite_matrix` would NOT do: it is satisfied by any pair of mutually
+    # consistent but jointly wrong conventions, and in this direction it is not even the
+    # identity — `_l2_coeffs!` discards the trace and the antisymmetric part, so
+    # `_l2_onsite_matrix ∘ _l2_coeffs!` is a projection.
+    @testset "the l=1/l=2 coefficient writers reproduce their forms against Zlm" begin
+        rng = MersenneTwister(3)
+        e1 = e2 = 0.0
+        for _ = 1:200
+            g = SVector{3,Float64}(randn(rng, 3))
+            A = SMatrix{3,3,Float64}(randn(rng, 3, 3))   # neither symmetric nor traceless
+            c = zeros(9)
+            MR._l1_coeffs!(c, g)
+            MR._l2_coeffs!(c, A)
+            e = normalize(SVector{3,Float64}(randn(rng, 3)))
+            # the traceless symmetric part is what `e' A e` reduces to on the unit sphere
+            S = (A + transpose(A)) / 2
+            At = S - (tr(S) / 3) * I
+            e1 = max(e1, abs(sum(c[MR.Harmonics.lm_index(1, m)] * _Z(1, m, e)
+                                 for m = -1:1) - dot(g, e)))
+            e2 = max(e2, abs(sum(c[MR.Harmonics.lm_index(2, m)] * _Z(2, m, e)
+                                 for m = -2:2) - dot(e, At * e)))
+        end
+        @test e1 < 1e-12
+        @test e2 < 1e-12
+
+        # non-vacuity: a diagonal tensor — what every other test here uses — leaves the
+        # four branches this testset exists for at exactly zero.
+        cd = zeros(9)
+        MR._l2_coeffs!(cd, SMatrix{3,3,Float64}(1, 0, 0, 0, 1, 0, 0, 0, -2))
+        @test cd[MR.Harmonics.lm_index(2, 0)] != 0.0
+        @test all(cd[MR.Harmonics.lm_index(2, m)] == 0.0 for m in (-2, -1, 1, 2))
+    end
+
+    # The end-to-end complement: helper-level pins do not prove the helper is REACHED.
+    # Rotating the single-ion tensor and the reference by the same R must leave the
+    # sublattice magnetization invariant — exact physics, and exactly what a wrong
+    # off-diagonal branch breaks. The rotation is generic (no axis aligned with x/y/z),
+    # so all four otherwise-untested branches carry weight.
+    @testset "single-ion anisotropy is rotationally covariant" begin
+        Rz(t) = SMatrix{3,3,Float64}(cos(t), sin(t), 0, -sin(t), cos(t), 0, 0, 0, 1)
+        Ry(t) = SMatrix{3,3,Float64}(cos(t), 0, -sin(t), 0, 1, 0, sin(t), 0, cos(t))
+        R = Rz(0.7) * Ry(0.9) * Rz(0.3)
+        A0 = SMatrix{3,3,Float64}(1, 0, 0, 0, 1, 0, 0, 0, -2)     # easy axis along z
+        A = R * A0 * transpose(R)
+        @test all(abs.((A[1, 2], A[2, 3], A[1, 3], A[1, 1] - A[2, 2])) .> 1e-3)
+
+        n = R * SVector{3,Float64}(0, 0, 1)
+        J = [0.0 -1.0; -1.0 0.0]
+        ref_n = hcat(Vector(n), Vector(n))
+        s_z = MFASampler(ExchangeModel(J; onsite = [A0, A0]);
+                         reference = Float64[0 0; 0 0; 1 1])
+        s_R = MFASampler(ExchangeModel(J; onsite = [A, A]); reference = ref_n)
+        # control: rotate the reference but NOT the tensor — the invariance must FAIL,
+        # or the comparison above would be measuring nothing.
+        s_bad = MFASampler(ExchangeModel(J; onsite = [A0, A0]); reference = ref_n)
+        for τ in (0.4, 0.8, 1.2)
+            mz = mfa_sublattice_m(s_z, τ)[1]
+            @test isapprox(mfa_sublattice_m(s_R, τ)[1], mz; atol = 1e-6)
+            @test abs(mfa_sublattice_m(s_bad, τ)[1] - mz) > 0.1
+        end
+    end
 end

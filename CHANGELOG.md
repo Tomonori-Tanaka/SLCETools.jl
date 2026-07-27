@@ -6,6 +6,20 @@ release, so everything lives under *Unreleased*.
 
 ## [Unreleased]
 
+### Added — test coverage for the off-diagonal `l=2` single-ion branches
+
+- `_l2_coeffs!` writes five coefficients, and every single-ion test in this package fed
+  it a **diagonal** tensor (`diag(1,1,-2)`, `diag(0,0,3)`), on which four of the five are
+  identically zero (`axy = ayz = axz = 0` and `axx − ayy = 0`). A swapped `axz ↔ ayz`, a
+  sign flip or a dropped factor of 2 in the `m = ±1, ±2` branches was therefore silent
+  across the entire suite — while the path is reachable in production, where a fitted
+  low-symmetry single-ion tensor would produce an anisotropy axis pointing the wrong way.
+  Two new gates in `test_tensorial.jl`: a semantic pin of both writers against `Zlm`
+  itself (random non-symmetric, non-traceless `A`), and an end-to-end rotational-covariance
+  test through `MFASampler` carrying a control that must fail. Verified by mutation — with
+  `ayz`/`axz` swapped, only the two new testsets go red and all 635 pre-existing assertions
+  stay green. No behaviour changed.
+
 ### Fixed
 
 - `sphere_quadrature`'s docstring was attached to the internal helper

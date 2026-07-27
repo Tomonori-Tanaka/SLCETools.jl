@@ -77,6 +77,16 @@ Inherited from the core (`SLCE`'s `CLAUDE.md`); the ones this package leans on:
   `SLCE.Harmonics.N1/A2/B2` (single definition upstream), so the forward and inverse
   conversions cannot drift apart. The bilinear extraction uses the core's (inverse) matrices
   via `bilinear_terms`; do not duplicate that delicate conversion here.
+  Gates: `test_tensorial.jl` "the l=1/l=2 coefficient writers reproduce their forms against
+  Zlm" (semantic, against `Zlm` itself) + "single-ion anisotropy is rotationally covariant"
+  (end-to-end through `MFASampler`, with a control that must fail). Both are needed and
+  both must use a **non-diagonal, non-traceless** `A`: on a diagonal tensor four of the five
+  `l=2` branches are identically zero, which is what every other single-ion test in this
+  package feeds them — a swapped `axz ↔ ayz` was silent across the whole suite until these
+  landed (verified by mutation: 635 pre-existing assertions stayed green). Do NOT "simplify"
+  either gate into a round-trip against `_l2_onsite_matrix`: a round-trip is satisfied by any
+  pair of mutually consistent but jointly wrong conventions, and in this direction it is not
+  even the identity — `_l2_coeffs!` discards the trace and the antisymmetric part.
 - **`io/vasp.jl` — read ↔ write inverse-consistency** (`SLCETools.VASP`, one module holds both):
   (1) **SAXIS frame** — one `_saxis_rotation` (`R = Rz(α)Ry(β)`) serves both; the reader rotates
   SAXIS → Cartesian by `R`, the writer Cartesian → SAXIS by `Rᵀ`, so a write → read round-trip is
