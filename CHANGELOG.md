@@ -6,6 +6,15 @@ release, so everything lives under *Unreleased*.
 
 ## [Unreleased]
 
+### Fixed
+
+- `sphere_quadrature`'s docstring was attached to the internal helper
+  `_quadrature_size` instead of the function it documents: a docstring binds to the
+  next *expression*, and the intervening comment block did not separate them. The
+  public function was therefore undocumented and the strict docs build failed with
+  `no docs found for 'MeanFieldEngine.sphere_quadrature'`. Only the docstring moved;
+  no behaviour changed.
+
 ### Changed — sync to SLCE's `TrainingDatum` data layer (BREAKING upstream)
 
 - The OSZICAR reader follows SLCE's `SpinDatum`-type → `TrainingDatum` replacement:

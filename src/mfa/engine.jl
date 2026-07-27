@@ -271,6 +271,15 @@ function field_scale(c::AbstractVector{<:Real})::Float64
     return vmax - vmin
 end
 
+# The auto-selected per-angle node count — the single definition shared by
+# `sphere_quadrature` and the memoizing `multipole_average` (whose cache is keyed on it).
+# Cap: beyond ~this concentration the integrand is essentially a delta and ⟨Z_lm⟩ → its
+# value at the peak, so a finer grid buys nothing but cost — and an uncapped
+# `base ∝ concentration` would explode (base² nodes) for the large molecular fields of
+# the τ → 0 limit.
+_quadrature_size(lmax::Integer, concentration::Real)::Int =
+    min(2 * Int(lmax) + 6 + ceil(Int, max(0.0, Float64(concentration))), 256)
+
 """
     sphere_quadrature(lmax; concentration = 0.0, ntheta = 0, nphi = 0) -> SphereQuadrature
 
@@ -281,15 +290,6 @@ concentration `κ`) adds the resolution a sharply peaked field needs. Pass expli
 `ntheta`/`nphi` to override. Use `multipole_average(c, lmax)` to have the size chosen from
 `c` automatically.
 """
-# The auto-selected per-angle node count — the single definition shared by
-# `sphere_quadrature` and the memoizing `multipole_average` (whose cache is keyed on it).
-# Cap: beyond ~this concentration the integrand is essentially a delta and ⟨Z_lm⟩ → its
-# value at the peak, so a finer grid buys nothing but cost — and an uncapped
-# `base ∝ concentration` would explode (base² nodes) for the large molecular fields of
-# the τ → 0 limit.
-_quadrature_size(lmax::Integer, concentration::Real)::Int =
-    min(2 * Int(lmax) + 6 + ceil(Int, max(0.0, Float64(concentration))), 256)
-
 function sphere_quadrature(lmax::Integer; concentration::Real = 0.0,
                            ntheta::Integer = 0, nphi::Integer = 0)::SphereQuadrature
     # An explicit `ntheta`/`nphi` is honored uncapped.
