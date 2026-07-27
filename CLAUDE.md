@@ -71,6 +71,15 @@ Inherited from the core (`SLCE`'s `CLAUDE.md`); the ones this package leans on:
   on the unit-direction `Zlm_unsafe` fast path — `Harmonics` is part of the core's declared
   (`public`-keyword) stable surface, `Zlm_unsafe` included). A normalization change upstream
   shifts every multipole average.
+  Gate: `test_multipole.jl` "many-body factorization: `V_a/β` equals the conditional mean
+  energy ⟨E|e_a⟩" — it fences `site_potential` against `SLCE.predict_energy`, so the
+  `(4π)^(body/2)` scale and the `μ = idx − l − 1` ↔ `lm_index` correspondence cannot drift.
+  Do NOT add a "normalization pin" on the harmonics as the engine consumes them: the engine
+  derives its own constant from `Harmonics` (`_l1_field` reads `Zlm` at the three Cartesian
+  axes; `test_site_engine.jl` divides by `N10`), so such a pin self-cancels and would be
+  green before and after the change it claims to catch. A pure, consistent renormalization
+  upstream is *supposed* to leave this gate green — it is harmless-with-refit; the hard
+  literals that would flag a reproducibility break live upstream in `test_harmonics.jl`.
 - **`mfa/exchange.jl` `_l1_coeffs!` / `_l2_coeffs!`** (field → tesseral coefficients) are the
   *forward* of the core's `_l1_pair_matrix` / `_l2_onsite_matrix` (tesseral → `3×3`, in the
   core's `slce/bilinear.jl`). The tesseral constants `_N1`/`_A2`/`_B2` are **bound to**

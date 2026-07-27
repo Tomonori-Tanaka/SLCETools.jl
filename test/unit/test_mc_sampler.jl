@@ -185,6 +185,14 @@ _mc_rand_config(rng, n) = reduce(hcat, [Vector(MR._random_unit(rng)) for _ = 1:n
     end
 
     @testset "kelvin ↔ kT control" begin
+        # Pin the VALUE, not just its self-consistency. Everything below uses `kb` on
+        # both sides of the comparison, so it passes for ANY constant — a typo here
+        # would silently rescale every kelvin the sampler is ever given, and nothing
+        # in the suite would notice. (SLCEMonteCarlo pins its own copy the same way;
+        # the two packages share no code, so each must anchor itself to CODATA.)
+        @test SLCETools.KB_EV == 1.380649e-23 / 1.602176634e-19
+        @test isapprox(SLCETools.KB_EV, 8.617333262e-5; rtol = 1e-9)
+
         s = MetropolisSampler(_mc_dimer_model())
         kb = SLCETools.KB_EV
         a = sample(s, 3; temperature = 300.0, burnin = 20, thin = 2,
