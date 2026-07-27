@@ -46,3 +46,32 @@ jobs:
         run: julia --project=SLCETools.jl -e 'using Pkg; Pkg.test()'
         env:
           TEST_MODE: all
+
+  docs:
+    name: documentation build
+    runs-on: ubuntu-latest
+    steps:
+      # Same sibling layout as the test job: `docs/Project.toml` resolves SLCE as
+      # `../../SLCE.jl`.
+      - uses: actions/checkout@v4
+        with:
+          path: SLCETools.jl
+      - uses: actions/checkout@v4
+        with:
+          repository: Tomonori-Tanaka/SLCE.jl
+          path: SLCE.jl
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: "1.12"
+      - uses: julia-actions/cache@v2
+      # `Pkg.test()` never builds the docs, and this package is where that gap was
+      # actually paid: `sphere_quadrature`'s docstring had silently attached to the
+      # internal helper `_quadrature_size` (a docstring binds to the next EXPRESSION,
+      # and the comment block between them did not separate the two), leaving a public
+      # function undocumented and the strict build failing on its `@docs` entry — with
+      # the suite green throughout. Found by hand on 2026-07-27; this job is why it
+      # would not be found by hand next time.
+      - name: Instantiate the docs environment
+        run: julia --project=SLCETools.jl/docs -e 'using Pkg; Pkg.instantiate()'
+      - name: Build the Documenter site
+        run: julia --project=SLCETools.jl/docs SLCETools.jl/docs/make.jl
