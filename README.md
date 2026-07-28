@@ -1,7 +1,12 @@
 # SLCETools.jl
 
-Auxiliary tooling around the spin-cluster-expansion (SCE) fitting core
-[`SLCE.jl`](../SLCE.jl): utilities that **consume** a fitted
+[![Docs](https://img.shields.io/badge/docs-dev-blue.svg)](https://tomonori-tanaka.github.io/SLCETools.jl/dev/)
+[![CI](https://github.com/Tomonori-Tanaka/SLCETools.jl/actions/workflows/CI.yml/badge.svg)](https://github.com/Tomonori-Tanaka/SLCETools.jl/actions/workflows/CI.yml)
+
+**Documentation:** <https://tomonori-tanaka.github.io/SLCETools.jl/dev/>
+
+Auxiliary tooling around the spin–lattice cluster-expansion (SLCE) fitting core
+[`SLCE.jl`](https://github.com/Tomonori-Tanaka/SLCE.jl): utilities that **consume** a fitted
 `SLCEModel` rather than build one.
 
 - **Mean-field (MFA) spin-configuration sampling** *(available)* — draw physically
@@ -23,7 +28,7 @@ Auxiliary tooling around the spin-cluster-expansion (SCE) fitting core
   spin-only `TrainingDatum`s) and **write** constrained-noncollinear inputs from sampled configurations
   (`write_incar` / `write_inputs`). Read and write share one frame / format convention.
 - **Active learning** *(planned)* — an efficient model-construction loop that proposes
-  configurations (via the sampler), labels them with DFT, and refits the SCE model. See
+  configurations (via the sampler), labels them with DFT, and refits the SLCE model. See
   `SPEC.md`.
 
 ## Relationship to the ecosystem
@@ -39,7 +44,7 @@ Both packages are unregistered; develop the core by path:
 
 ```julia
 using Pkg
-Pkg.develop(path="../SLCE.jl")   # the SCE fitting core
+Pkg.develop(path="../SLCE.jl")   # the SLCE fitting core
 ```
 
 ## Usage
@@ -54,7 +59,7 @@ samp  = sample(s, 200; tau = 0.6)           # 200 configurations at τ = 0.6
 ```
 
 The sampler reads the fitted Hamiltonian only through `SLCE`'s public surface
-(`multipole_terms`, `bilinear_terms`, `SLCE.Harmonics`), so it is insulated from
+(`spin_multipole_terms`, `bilinear_terms`, `SLCE.Harmonics`), so it is insulated from
 the core's SALC-basis internals.
 
 > **Known name collision:** `SLCETools` exports `sample`, which collides with

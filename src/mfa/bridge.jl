@@ -1,6 +1,6 @@
-# Mean-field sampler — extracting an `ExchangeModel` / `MultipoleModel` from a fitted SCE
+# Mean-field sampler — extracting an `ExchangeModel` / `MultipoleModel` from a fitted SLCE
 # (see `docs/specs/mfa-sampling.md`). Reads the fitted Hamiltonian only through the core's
-# public introspection surface (`SLCE.bilinear_terms` / `multipole_terms`), never
+# public introspection surface (`SLCE.bilinear_terms` / `spin_multipole_terms`), never
 # the SALC-basis internals — so the basis representation can evolve independently.
 
 # Build the directed bilinear tensor `bilinear[a,b] = S_ab` and single-ion `onsite[a] = A_a`
@@ -49,7 +49,7 @@ function ExchangeModel(model::SLCEModel)
     bilinear, onsite, nselfbond, nskipped = _extract_bilinear_onsite(model)
     nskipped > 0 && @warn "ExchangeModel keeps the bilinear (Heisenberg + DMI + anisotropic) " *
         "and single-ion channels; dropped $nskipped higher-order / higher-l SALC(s) " *
-        "(use the full SCE `MFASampler(model; reference)` to keep them)."
+        "(use the full SLCE `MFASampler(model; reference)` to keep them)."
     nselfbond > 0 && @warn "ExchangeModel: skipping $nselfbond on-site (a == image-of-a) " *
         "bilinear term(s); the rigid-axis mean field does not represent them (only reachable " *
         "via AllImages). The default MinimumImage selection drops such self-pairs."
@@ -57,13 +57,13 @@ function ExchangeModel(model::SLCEModel)
 end
 
 # Digest the fitted model's multipole terms into `_MFATerm`s, applying the `(4π)^(body/2)`
-# tesseral scale (`multipole_terms` returns the raw fitted `jϕ`). This is the package's
+# tesseral scale (`spin_multipole_terms` returns the raw fitted `jϕ`). This is the package's
 # single scale-application site — both the mean-field `MultipoleModel` and the Metropolis
 # `MetropolisSampler` consume it; never re-apply downstream. Returns `(terms, lmax)`.
 function _scaled_multipole_terms(model::SLCEModel)
     terms = _MFATerm[]
     lmax = 0
-    for mt in multipole_terms(model)
+    for mt in spin_multipole_terms(model)
         # Both consumers require distinct sites per cluster: the mean-field contraction
         # decouples every site (⟨∏Z⟩ → ∏⟨Z⟩), and the Metropolis local update relies on
         # the site-a coefficients being independent of e_a. The cluster enumeration drops
@@ -90,7 +90,7 @@ Digest a fitted `SLCEModel` into the full-multipole mean field (P4): one mean-fi
 cluster member / `l`-ordering (carrying `jϕ·(4π)^(N/2)`, the member atoms, the per-site
 `ls`, and the folded coefficient tensor), the model `lmax`, and the bilinear
 [`ExchangeModel`](@ref) used only for the `l=1` temperature scale. Reads the terms through
-the core's public `multipole_terms` view, so it keeps **all** channels — bilinear,
+the core's public `spin_multipole_terms` view, so it keeps **all** channels — bilinear,
 single-ion, and higher-order / many-body — and the mean field iterates the full multipole
 averages `⟨Z_lm⟩`.
 """
@@ -104,7 +104,7 @@ end
     MFASampler(model::SLCEModel; reference) -> MFASampler
 
 The full-multipole mean-field sampler (P4): build a [`MultipoleModel`](@ref) from the fitted
-SCE (keeping every channel — bilinear, single-ion, and higher-order / many-body) and sample
+SLCE (keeping every channel — bilinear, single-ion, and higher-order / many-body) and sample
 about `reference`. The `l=1` temperature scale `T_MF = ρ/3` comes from the bilinear part;
 the single-site distribution (a Bingham / higher-multipole shape) is drawn with the
 Metropolis engine. See [`MFASampler(::ExchangeModel)`](@ref) for the bilinear-only path.

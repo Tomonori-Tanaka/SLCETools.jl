@@ -4,7 +4,7 @@
 CurrentModule = SLCETools
 ```
 
-`SLCETools.VASP` is the concrete VASP adapter for the SCE workflow — the code-specific I/O the
+`SLCETools.VASP` is the concrete VASP adapter for the SLCE workflow — the code-specific I/O the
 fitting core ([SLCE](https://github.com/Tomonori-Tanaka/SLCE.jl)) keeps
 out of itself (the core owns only the abstract `AbstractDFTSource` / `TrainingDatum` /
 `SLCEDataset` seam). It goes both ways:

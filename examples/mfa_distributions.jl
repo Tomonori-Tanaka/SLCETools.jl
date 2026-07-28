@@ -13,7 +13,7 @@
 # deformed into the distribution's lobes, with a temperature slider over the sweep: as τ
 # rises the single-site distribution visibly broadens from a tight cap (ordered) toward a
 # near-uniform sphere (disordered). The tensorial / multipole samplers (single-ion
-# anisotropy, full SCE multipoles) export through the very same `write_mfa_distributions`
+# anisotropy, full SLCE multipoles) export through the very same `write_mfa_distributions`
 # — only the per-atom coefficient length (lmax) grows.
 
 using SLCE

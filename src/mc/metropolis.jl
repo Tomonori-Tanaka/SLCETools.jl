@@ -1,4 +1,4 @@
-# Metropolis Monte-Carlo sampler over a fitted SCE (see `docs/specs/mc-sampling.md`).
+# Metropolis Monte-Carlo sampler over a fitted SLCE (see `docs/specs/mc-sampling.md`).
 #
 # Unlike the mean-field `MFASampler` (single-site, correlation-free), this samples the
 # *joint* Boltzmann distribution of the fitted multipole Hamiltonian on the training cell
@@ -16,50 +16,45 @@
 # single-spin move is `ΔE = c_a · (Z(e′) − Z(e))`. β enters only in the accept step —
 # `c_a` and every stored energy stay in the model's energy units.
 
-"""
-    KB_EV
-
-Boltzmann's constant in eV/K (the exact CODATA ratio `1.380649e-23 J/K` /
-`1.602176634e-19 J/eV`). Converts the kelvin control of [`sample`](@ref) on a
-[`MetropolisSampler`](@ref) to the energy scale of an **eV-fitted** model:
-`kT = KB_EV * temperature`.
-"""
-const KB_EV = 1.380649e-23 / 1.602176634e-19
+# `KB_EV` and the kelvin/kT resolution (`SLCE.resolve_kt`) are NOT defined here — they
+# live in the core, which SLCEMonteCarlo re-exports too. Both packages used to carry a
+# character-for-character copy; two copies of a unit conversion are two things that can
+# drift apart while both suites stay green.
 
 """
     MetropolisSampler(model::SLCEModel; reference = nothing)
 
 Single-spin Metropolis Monte-Carlo sampler of the **joint** Boltzmann distribution
-`P({e}) ∝ exp(−E({e})/k_BT)` of a fitted SCE on its training cell (periodic images are
+`P({e}) ∝ exp(−E({e})/k_BT)` of a fitted SLCE on its training cell (periodic images are
 already folded into the fitted terms). Complements the mean-field [`MFASampler`](@ref):
 the draws carry the model's true inter-site correlations, at the cost of a Markov chain
 (burn-in / thinning) instead of closed-form single-site draws.
 
 The control variable of [`sample`](@ref) is the **absolute temperature** — `temperature`
-in kelvin (converted with [`KB_EV`](@ref); assumes an eV-fitted model) or `kT` directly
+in kelvin (converted with `KB_EV`; assumes an eV-fitted model) or `kT` directly
 in the model's energy units — not the reduced `τ = T/T_MF` of the mean-field sampler.
 Any body order works, including models without a bilinear (`l=1`) channel.
 
 `reference` (optional, `3 × n_atoms` unit columns) sets the default chain start; without
 it a chain starts from a uniform-random configuration (see `init` in [`sample`](@ref)).
 
-The test-facing inner form `MetropolisSampler(natoms, lmax, terms; reference)` accepts a
+The test-facing inner form `MetropolisSampler(n_atoms, lmax, terms; reference)` accepts a
 hand-built term list.
 """
 struct MetropolisSampler <: AbstractSampler
-    natoms::Int
+    n_atoms::Int
     lmax::Int
     terms::Vector{_MFATerm}            # coef = jϕ·(4π)^(N/2), model energy units
     terms_of::Vector{Vector{Int}}      # per-atom adjacency: indices into `terms`
     reference::Union{Nothing,Matrix{Float64}}
 
-    function MetropolisSampler(natoms::Int, lmax::Int, terms::Vector{_MFATerm};
+    function MetropolisSampler(n_atoms::Int, lmax::Int, terms::Vector{_MFATerm};
                                reference::Union{Nothing,AbstractMatrix{<:Real}} = nothing)
-        natoms >= 1 || throw(ArgumentError("natoms must be ≥ 1; got $natoms"))
+        n_atoms >= 1 || throw(ArgumentError("n_atoms must be ≥ 1; got $n_atoms"))
         isempty(terms) && throw(ArgumentError("the term list is empty"))
         for t in terms
-            all(a -> 1 <= a <= natoms, t.atoms) || throw(ArgumentError(
-                "term atoms $(t.atoms) outside 1:$natoms"))
+            all(a -> 1 <= a <= n_atoms, t.atoms) || throw(ArgumentError(
+                "term atoms $(t.atoms) outside 1:$n_atoms"))
             # Site `a` appearing once per term is what makes `c_a` independent of `e_a`
             # (the ΔE locality the sweep relies on); `_scaled_multipole_terms` guarantees
             # it for fitted models, assert it for hand-built term lists.
@@ -73,15 +68,15 @@ struct MetropolisSampler <: AbstractSampler
             nothing
         else
             r = _normalize_reference(reference)
-            size(r, 2) == natoms || throw(DimensionMismatch(
-                "reference has $(size(r, 2)) atoms but the sampler has $natoms"))
+            size(r, 2) == n_atoms || throw(DimensionMismatch(
+                "reference has $(size(r, 2)) atoms but the sampler has $n_atoms"))
             r
         end
-        terms_of = [Int[] for _ = 1:natoms]
+        terms_of = [Int[] for _ = 1:n_atoms]
         for (t, term) in enumerate(terms), a in term.atoms
             push!(terms_of[a], t)
         end
-        return new(natoms, lmax, terms, terms_of, ref)
+        return new(n_atoms, lmax, terms, terms_of, ref)
     end
 end
 
@@ -92,7 +87,7 @@ MetropolisSampler(model::SLCEModel;
 end
 
 Base.show(io::IO, s::MetropolisSampler) =
-    print(io, "MetropolisSampler(", s.natoms, " atoms, lmax=", s.lmax, ", ",
+    print(io, "MetropolisSampler(", s.n_atoms, " atoms, lmax=", s.lmax, ", ",
           length(s.terms), " terms)")
 
 """
@@ -101,7 +96,7 @@ Base.show(io::IO, s::MetropolisSampler) =
 Labeled result of [`sample`](@ref) on a [`MetropolisSampler`](@ref). `configs` is the
 bare `Vector{Matrix{Float64}}` (each `3 × n_atoms` unit directions); the parallel labels
 are `kT` (`k_B·T` in the model's energy units — always well-defined), `temperature`
-(kelvin, `= kT / KB_EV` — meaningful for an eV-fitted model), `energy` (the SCE energy
+(kelvin, `= kT / KB_EV` — meaningful for an eV-fitted model), `energy` (the SLCE energy
 of that stored configuration, `j0` excluded — a constant shift), and `acceptance` (the
 Metropolis accept fraction over the sweeps that produced it; the first configuration at
 each temperature includes its burn-in window). The object is iterable and indexable as
@@ -190,7 +185,7 @@ end
     return coef * E
 end
 
-# The SCE energy of the configuration whose tesseral rows are `Z`: the sum of every
+# The SLCE energy of the configuration whose tesseral rows are `Z`: the sum of every
 # term's contribution (the introspection contract makes the terms plain summands), i.e.
 # `predict_energy(model, config) − j0`.
 function _total_energy(terms::Vector{_MFATerm}, Z::Vector{Vector{Float64}})::Float64
@@ -207,11 +202,11 @@ function _config_energy(s::MetropolisSampler, config::Matrix{Float64})::Float64
     nlm = (s.lmax + 1)^2
     Z = [_zlm_row!(zeros(nlm),
                    SVector{3,Float64}(config[1, a], config[2, a], config[3, a]), s.lmax)
-         for a = 1:s.natoms]
+         for a = 1:s.n_atoms]
     return _total_energy(s.terms, Z)
 end
 
-# One lattice sweep: `natoms` sequential single-spin attempts (deterministic site order —
+# One lattice sweep: `n_atoms` sequential single-spin attempts (deterministic site order —
 # a composition of per-site reversible kernels, so the Boltzmann distribution stays
 # stationary; sequential scan consumes no RNG for site selection and keeps runs
 # bit-reproducible). Mutates `config` / `Zcur` in place; `c` / `Znew` are scratch.
@@ -220,7 +215,7 @@ function _mc_sweep!(rng::AbstractRNG, config::Matrix{Float64},
                     Zcur::Vector{Vector{Float64}}, s::MetropolisSampler, β::Float64,
                     step::Float64, c::Vector{Float64}, Znew::Vector{Float64})::Int
     nacc = 0
-    for a = 1:s.natoms
+    for a = 1:s.n_atoms
         fill!(c, 0.0)
         for t in s.terms_of[a]
             term = s.terms[t]
@@ -264,46 +259,22 @@ function _mc_initial_config(s::MetropolisSampler,
                             rng::AbstractRNG)::Matrix{Float64}
     if init !== nothing
         cfg = _normalize_reference(init)
-        size(cfg, 2) == s.natoms || throw(DimensionMismatch(
-            "init has $(size(cfg, 2)) atoms but the sampler has $(s.natoms)"))
+        size(cfg, 2) == s.n_atoms || throw(DimensionMismatch(
+            "init has $(size(cfg, 2)) atoms but the sampler has $(s.n_atoms)"))
         return cfg
     end
     s.reference === nothing || return copy(s.reference)
-    cfg = Matrix{Float64}(undef, 3, s.natoms)
-    for a = 1:s.natoms
+    cfg = Matrix{Float64}(undef, 3, s.n_atoms)
+    for a = 1:s.n_atoms
         u = _random_unit(rng)
         cfg[1, a], cfg[2, a], cfg[3, a] = u[1], u[2], u[3]
     end
     return cfg
 end
 
-# Resolve exactly one of `temperature` (kelvin) / `kT` (model energy units) — scalar or
-# collection — into a validated k_B·T vector in the model's energy units. Mirrors the
-# mean-field `_resolve_taus` tau/m pattern; the two live under distinct names so a kelvin
-# value can never be silently read as an energy (or vice versa).
-function _resolve_kT(temperature, kT)::Vector{Float64}
-    (temperature === nothing) == (kT === nothing) && throw(ArgumentError(
-        "provide exactly one of `temperature` (kelvin) or `kT` " *
-        "(k_B·T, model energy units)"))
-    vals = if kT !== nothing
-        kT isa Real ? [Float64(kT)] : Float64[Float64(x) for x in kT]
-    else
-        # validate in kelvin first, so the error echoes the unit the caller used
-        ts = temperature isa Real ? [Float64(temperature)] :
-            Float64[Float64(x) for x in temperature]
-        for T in ts
-            (isfinite(T) && T > 0) || throw(ArgumentError(
-                "temperature must be finite and > 0 kelvin; got $T"))
-        end
-        KB_EV .* ts
-    end
-    isempty(vals) && throw(ArgumentError("the temperature/kT collection is empty"))
-    for x in vals
-        (isfinite(x) && x > 0) || throw(ArgumentError(
-            "kT must be finite and > 0 (k_B·T, model energy units); got $x"))
-    end
-    return vals
-end
+# The kelvin / kT resolution is `SLCE.resolve_kt` (imported at the top of the package).
+# It mirrors the mean-field `_resolve_taus` tau/m pattern: the two controls live under
+# distinct names so a kelvin value can never be silently read as an energy.
 
 """
     sample(s::MetropolisSampler, n; temperature, kT, burnin = 200, thin = 10, step = 0.6,
@@ -311,9 +282,9 @@ end
     sample(s::MetropolisSampler; temperature, kT, nsamples = 1, burnin = 200, thin = 10,
            step = 0.6, rng, init = nothing, randomize = false) -> MCSample
 
-Draw spin configurations from the joint Boltzmann distribution of the fitted SCE by
+Draw spin configurations from the joint Boltzmann distribution of the fitted SLCE by
 single-spin Metropolis. Provide **exactly one** absolute-temperature control:
-`temperature` in **kelvin** (converted with [`KB_EV`](@ref) — assumes the model's energy
+`temperature` in **kelvin** (converted with `KB_EV` — assumes the model's energy
 unit is eV, the package convention) or `kT` — `k_B·T` directly in the model's energy
 units (theory/test runs, non-eV models). Every entry must be `> 0`.
 
@@ -342,7 +313,7 @@ run — call once per temperature for independent chains.
 
 Returns an [`MCSample`](@ref): `.configs` with parallel labels `.kT` (model energy
 units), `.temperature` (kelvin), `.energy` (the stored — rotated, if `randomize` —
-configuration's SCE energy, `j0` excluded), and `.acceptance` (accept fraction over the
+configuration's SLCE energy, `j0` excluded), and `.acceptance` (accept fraction over the
 sweeps producing each configuration).
 """
 function sample(s::MetropolisSampler, n::Integer; temperature = nothing, kT = nothing,
@@ -351,7 +322,7 @@ function sample(s::MetropolisSampler, n::Integer; temperature = nothing, kT = no
                 init::Union{Nothing,AbstractMatrix{<:Real}} = nothing,
                 randomize::Bool = false)::MCSample
     n >= 0 || throw(ArgumentError("n must be ≥ 0; got $n"))
-    kts = _resolve_kT(temperature, kT)
+    kts = resolve_kt(temperature, kT)
     length(kts) == 1 ||
         throw(ArgumentError("the positional `n` form takes a scalar `temperature`/`kT`; " *
                             "pass a collection without `n` to sweep"))
@@ -365,7 +336,7 @@ function sample(s::MetropolisSampler; temperature = nothing, kT = nothing,
                 init::Union{Nothing,AbstractMatrix{<:Real}} = nothing,
                 randomize::Bool = false)::MCSample
     nsamples >= 0 || throw(ArgumentError("nsamples must be ≥ 0; got $nsamples"))
-    return _mc_run(s, _resolve_kT(temperature, kT), nsamples, burnin, thin, step,
+    return _mc_run(s, resolve_kt(temperature, kT), nsamples, burnin, thin, step,
                    rng, init, randomize)
 end
 
@@ -383,7 +354,7 @@ function _mc_run(s::MetropolisSampler, kts::Vector{Float64}, per::Integer,
     nlm = (s.lmax + 1)^2
     Zcur = [_zlm_row!(zeros(nlm),
                       SVector{3,Float64}(config[1, a], config[2, a], config[3, a]),
-                      s.lmax) for a = 1:s.natoms]
+                      s.lmax) for a = 1:s.n_atoms]
     c = zeros(nlm)
     Znew = zeros(nlm)
 
@@ -398,12 +369,12 @@ function _mc_run(s::MetropolisSampler, kts::Vector{Float64}, per::Integer,
         nacc, natt = 0, 0
         for _ = 1:burnin
             nacc += _mc_sweep!(rng, config, Zcur, s, β, stepf, c, Znew)
-            natt += s.natoms
+            natt += s.n_atoms
         end
         for _ = 1:per
             for _ = 1:thin
                 nacc += _mc_sweep!(rng, config, Zcur, s, β, stepf, c, Znew)
-                natt += s.natoms
+                natt += s.n_atoms
             end
             out = copy(config)
             E = _total_energy(s.terms, Zcur)

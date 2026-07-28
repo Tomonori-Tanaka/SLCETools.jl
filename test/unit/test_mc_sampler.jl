@@ -1,5 +1,5 @@
 # The Metropolis MC sampler (docs/specs/mc-sampling.md): single-spin Metropolis on the
-# joint Boltzmann distribution of a fitted SCE at an absolute temperature. Gates: the
+# joint Boltzmann distribution of a fitted SLCE at an absolute temperature. Gates: the
 # machine-precision local↔global energy consistency (ΔE = c_a·ΔZ against `predict_energy`),
 # the exact two-spin correlation ⟨e₁·e₂⟩ = −L(βJ), the single-site Langevin limit (where
 # the mean field is exact, so this doubles as the MFA cross-link), the `randomize` global
@@ -42,7 +42,7 @@ _mc_rand_config(rng, n) = reduce(hcat, [Vector(MR._random_unit(rng)) for _ = 1:n
     @testset "construction from a fitted model" begin
         s = MetropolisSampler(_mc_dimer_model())
         @test s isa AbstractSampler
-        @test s.natoms == 4
+        @test s.n_atoms == 4
         @test s.lmax == 1
         # one canonical member per physical bond (SLCE v4 canonical members);
         # both bond sites reference that single term
@@ -60,14 +60,14 @@ _mc_rand_config(rng, n) = reduce(hcat, [Vector(MR._random_unit(rng)) for _ = 1:n
         s = MetropolisSampler(model)
         nlm = (s.lmax + 1)^2
         rng = MersenneTwister(7)
-        cfg = _mc_rand_config(rng, s.natoms)
+        cfg = _mc_rand_config(rng, s.n_atoms)
         Z = [MR._zlm_row!(zeros(nlm), SVector{3,Float64}(cfg[:, a]), s.lmax)
-             for a = 1:s.natoms]
+             for a = 1:s.n_atoms]
 
         # the total contraction reproduces predict_energy − j0 (fixture j0 = 0)
         @test MR._total_energy(s.terms, Z) ≈ predict_energy(model, cfg) atol = 1e-12
 
-        for a = 1:s.natoms
+        for a = 1:s.n_atoms
             # single-site coefficients ≡ the a-th row of the mean-field all-sites build (β=1)
             c = zeros(nlm)
             for t in s.terms_of[a]
@@ -75,8 +75,8 @@ _mc_rand_config(rng, n) = reduce(hcat, [Vector(MR._random_unit(rng)) for _ = 1:n
                 MR._accumulate_site_term!(c, a, term.coef, term.atoms, term.ls,
                                           term.folded, Z)
             end
-            cs = [zeros(nlm) for _ = 1:s.natoms]
-            MR._site_coeffs_all!(cs, s.terms, Z, 1.0, s.natoms)
+            cs = [zeros(nlm) for _ = 1:s.n_atoms]
+            MR._site_coeffs_all!(cs, s.terms, Z, 1.0, s.n_atoms)
             @test c ≈ cs[a] atol = 1e-13
 
             # ΔE = c_a·ΔZ ≡ the full-energy difference ≡ the model-energy difference

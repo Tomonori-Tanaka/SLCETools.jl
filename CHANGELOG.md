@@ -6,6 +6,39 @@ release, so everything lives under *Unreleased*.
 
 ## [Unreleased]
 
+### Added — the documentation is published
+
+- **<https://tomonori-tanaka.github.io/SLCETools.jl/dev/>** — the Documenter site is
+  now deployed to GitHub Pages by the `documentation build` CI job (`deploydocs`
+  in `docs/make.jl`, `permissions: contents: write` on the job). It was being
+  built on every push and then thrown away.
+- **Per-line source links work**: `remotes = nothing` / `edit_link = nothing` are
+  gone in favour of the real repository, so every docstring on the site links to
+  its own lines on GitHub and each page has an "Edit on GitHub" link.
+- README carries a docs badge, a CI badge and the site URL.
+
+### Changed — BREAKING: the family-wide naming batch
+
+Follows SLCE.jl's third naming batch (see its `CHANGELOG`); landed in all four
+repositories together.
+
+- **`natoms` → `n_atoms`** on `ExchangeModel`, `MultipoleModel` and
+  `MetropolisSampler` (the struct field, the inner constructors' positional
+  parameter, and `show`). The core spells the same quantity `n_atoms`, and this
+  package calls `n_atoms(model)` on a fitted model two lines from reading
+  `exch.natoms` on its own digest. `n_atoms(::ExchangeModel)` /
+  `n_atoms(::MultipoleModel)` are now methods of the core's generic, so the accessor
+  reads the same on a `Crystal`, an `SLCEModel` and a coupling digest.
+- **`MultipoleTerm` / `multipole_terms` → `SpinMultipoleTerm` /
+  `spin_multipole_terms`** (upstream rename; the bridge and the MC sampler follow).
+- **`KB_EV` moved to `SLCE`**, and the private `_resolve_kT` is gone in favour of
+  `SLCE.resolve_kt`. This package and SLCEMonteCarlo each carried a copy of both —
+  character for character identical, which is what made the duplication a drift
+  hazard rather than an obvious bug. `SLCETools.KB_EV` still resolves (it is
+  re-published from here) and its value is bit-identical.
+- **Prose: `SCE` → `SLCE`, "spin–lattice cluster expansion"** — the ratified name.
+  Documentary only; no identifier changed.
+
 ### Added — test coverage for the off-diagonal `l=2` single-ion branches
 
 - `_l2_coeffs!` writes five coefficients, and every single-ion test in this package fed

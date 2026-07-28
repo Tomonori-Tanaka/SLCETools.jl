@@ -1,5 +1,11 @@
 # Spec — Mean-field spin-configuration sampling (`MFASampler`)
 
+> **Naming note (2026-07-28).** This is a dated decision record and is kept as
+> written; the names below are the ones the decision was taken under. Renamed
+> since, in the family-wide naming batch: `multipole_terms` → `spin_multipole_terms`. The current spelling is what
+> the code, `SPEC.md` and the API reference use.
+
+
 **Status:** in progress. Brainstormed and agreed; all design decisions are resolved
 (see [Decisions](#8-decisions)). Implementation proceeds in phases P0–P5 (§7).
 **P0 (engine), P1 (single global isotropic), P2 (multi-sublattice isotropic), P3

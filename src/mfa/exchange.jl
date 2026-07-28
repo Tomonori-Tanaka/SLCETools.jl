@@ -65,7 +65,7 @@ end
 # A[a,b] = −ê_a' S_ab ê_b, the linearized (longitudinal) coupling. For isotropic S = Jiso·I
 # this is −Jiso (ê_a·ê_b); symmetric because S_ba = S_ab'.
 function _mfa_matrix(exch::ExchangeModel, ref::Matrix{Float64})::Matrix{Float64}
-    n = exch.natoms
+    n = exch.n_atoms
     A = zeros(Float64, n, n)
     @inbounds for b = 1:n
         eb = SVector{3,Float64}(ref[1, b], ref[2, b], ref[3, b])
@@ -94,7 +94,7 @@ end
 # Exact for any collinear, isotropic reference; warns otherwise (D2; e.g. DMI / anisotropy
 # cant the true ground state, so a collinear reference is then not stationary).
 function _check_reference_stationary(exch::ExchangeModel, ref::Matrix{Float64})
-    n = exch.natoms
+    n = exch.n_atoms
     worst_t = 0.0
     scale = 0.0
     antialigned = false
@@ -159,7 +159,7 @@ end
 function _molecular_field(exch::ExchangeModel, ehat::Vector{SVector{3,Float64}},
                           m::Vector{Float64}, a::Int)::SVector{3,Float64}
     g = zero(SVector{3,Float64})
-    @inbounds for b = 1:exch.natoms
+    @inbounds for b = 1:exch.n_atoms
         g += exch.bilinear[a, b] * (m[b] * ehat[b])
     end
     return g

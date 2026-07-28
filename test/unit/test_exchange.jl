@@ -23,7 +23,7 @@ end
 @testset "ExchangeModel sampler (multi-sublattice, P2)" begin
     @testset "ExchangeModel construction validates and symmetrizes" begin
         m = ExchangeModel([0.0 -1.0; -1.0 0.0])
-        @test m.natoms == 2
+        @test m.n_atoms == 2
         @test m.Jiso == [0.0 -1.0; -1.0 0.0]
         @test_throws ArgumentError ExchangeModel([1.0 2.0 3.0])           # not square
         @test_throws ArgumentError ExchangeModel([0.0 1.0; -1.0 0.0])     # not symmetric
@@ -104,7 +104,7 @@ end
         @test all(c -> all(a -> abs(norm(@view c[:, a]) - 1) < 1e-10, 1:3), samp.configs)
     end
 
-    @testset "from a fitted SCE: Heisenberg isotropic part is extracted as tr(M)/3" begin
+    @testset "from a fitted SLCE: Heisenberg isotropic part is extracted as tr(M)/3" begin
         # This 4-atom fixture's single Heisenberg SALC couples atoms 1–2 only (a dimer);
         # atoms 3–4 are free. It exercises the tr(M)/3 isotropic extraction and the coupled
         # solve's handling of uncoupled (free) spins.
@@ -114,7 +114,7 @@ end
         # only the first SALC (the 1-2 bond orbit) carries a coupling; the rest are zero
         model = SLCEModel(b, 0.0, vcat([0.0137], zeros(n_salcs(b) - 1)))
         ex = ExchangeModel(model)
-        @test ex.natoms == 4
+        @test ex.n_atoms == 4
         @test ex.Jiso ≈ ex.Jiso'                                   # symmetric
         jnn = ex.Jiso[1, 2]
         @test abs(jnn) > 0                                         # the coupled dimer
@@ -139,7 +139,7 @@ end
         @test abs(mean(c[3, 3] for c in lo.configs)) < 0.3                       # free spin random
     end
 
-    @testset "from a fitted SCE: single-ion kept (P3), higher-l reported" begin
+    @testset "from a fitted SLCE: single-ion kept (P3), higher-l reported" begin
         lat = Lattice(Matrix(3.0 * I(3)))
         # a single-ion (ls=[2]) model: now extracted into onsite (tensorial), not dropped
         cr1 = Crystal(lat, reshape([0.0, 0, 0], 3, 1), [1], ["Fe"])

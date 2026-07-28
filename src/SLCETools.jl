@@ -1,7 +1,7 @@
 """
     SLCETools
 
-Auxiliary tooling around the spin-cluster-expansion (SCE) fitting core
+Auxiliary tooling around the spin–lattice cluster-expansion (SLCE) fitting core
 [`SLCE`](https://github.com/Tomonori-Tanaka/SLCE.jl): utilities that
 *consume* a fitted `SLCEModel`
 rather than build one. The first component is the **mean-field (MFA) spin-configuration
@@ -13,7 +13,7 @@ temperature `k_B·T`. Future components (active learning, configuration / diagno
 helpers) live alongside them.
 
 The package reads the fitted Hamiltonian only through `SLCE`'s public
-introspection surface (`multipole_terms`, `bilinear_terms`, and the tesseral-harmonic
+introspection surface (`spin_multipole_terms`, `bilinear_terms`, and the tesseral-harmonic
 submodule `SLCE.Harmonics`), never its SALC-basis internals.
 
 See `docs/specs/mfa-sampling.md` for the sampler design.
@@ -25,13 +25,20 @@ using StaticArrays
 using Statistics: mean
 using Random: AbstractRNG, default_rng
 
-# The SCE fitting core: the fitted-model type and the public, code-neutral introspection
+# The SLCE fitting core: the fitted-model type and the public, code-neutral introspection
 # surface (so the sampler never reaches into the SALC-basis internals). `Harmonics` is the
 # core's tesseral spherical-harmonic kernel, imported so the moved sampler files keep their
 # `Harmonics.Zlm` / `Harmonics.lm_index` calls unchanged.
 import SLCE.Harmonics
-using SLCE: SLCEModel, n_atoms, multipole_terms, MultipoleTerm, bilinear_terms,
+using SLCE: SLCEModel, spin_multipole_terms, SpinMultipoleTerm, bilinear_terms,
     Crystal
+# The kelvin ↔ model-energy conversion is the core's to own — this package used to carry a
+# character-for-character copy of both, as did SLCEMonteCarlo.
+using SLCE: KB_EV, resolve_kt
+# Extended here rather than shadowed: this package's coupling digests answer the core's
+# `n_atoms` question, so `n_atoms(m)` works uniformly across a `Crystal`, an `SLCEModel`
+# and an `ExchangeModel` / `MultipoleModel` / `MetropolisSampler`.
+import SLCE: n_atoms
 
 # --- mean-field spin-configuration sampling (docs/specs/mfa-sampling.md) ---
 # P0: the single-site engine submodule (potential, vMF / Metropolis draws, sphere quadrature),
@@ -43,7 +50,7 @@ using .MeanFieldEngine: _random_unit, _field_lmax, _l1_field, _rotate,
     sample_vmf_field, sample_site_metropolis, SphereQuadrature, sphere_quadrature,
     field_scale, multipole_average
 # types (carriers + sampler) → ExchangeModel construction → the τ self-consistency solvers →
-# the MFASampler constructors + the `sample` verb → extraction from a fitted SCE.
+# the MFASampler constructors + the `sample` verb → extraction from a fitted SLCE.
 include("mfa/types.jl")
 include("mfa/exchange.jl")
 include("mfa/selfconsistency.jl")

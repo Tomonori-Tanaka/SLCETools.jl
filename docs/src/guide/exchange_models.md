@@ -6,7 +6,7 @@ CurrentModule = SLCETools
 
 [`ExchangeModel`](@ref) is the neutral carrier of the **bilinear** exchange (and single-ion
 anisotropy) the mean-field sampler needs. [`MultipoleModel`](@ref) is its higher-order
-generalization, keeping **all** SCE channels. Both can be built by hand or extracted from a
+generalization, keeping **all** SLCE channels. Both can be built by hand or extracted from a
 fitted `SLCEModel`.
 
 ## Building an `ExchangeModel` by hand
@@ -68,7 +68,7 @@ s  = MFASampler(model; reference)    # ≡ MFASampler(SLCETools.MultipoleModel(m
 ```
 
 Both extractions read the fitted model through SLCE's public introspection surface
-(`multipole_terms`, `bilinear_terms`) — never its SALC-basis internals — so they are insulated
+(`spin_multipole_terms`, `bilinear_terms`) — never its SALC-basis internals — so they are insulated
 from the core's basis representation.
 
 ## Reference, stationarity, and temperature scale

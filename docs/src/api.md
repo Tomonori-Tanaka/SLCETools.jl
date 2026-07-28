@@ -36,8 +36,14 @@ sample
 MFASample
 MetropolisSampler
 MCSample
-KB_EV
 ```
+
+`SLCETools.KB_EV` — Boltzmann's constant in eV/K, the exact CODATA ratio
+`1.380649e-23 / 1.602176634e-19`, so that `kT = KB_EV * temperature` for an
+**eV-fitted** model. It is **defined in `SLCE`** and re-published here unchanged (one
+definition for the whole family; see
+[SLCE.jl's API reference](https://tomonori-tanaka.github.io/SLCE.jl/dev/api/#Units)),
+as is the `temperature`/`kT` resolution `SLCE.resolve_kt`.
 
 ## Carriers and helpers
 
@@ -61,7 +67,7 @@ The `MeanFieldEngine` submodule (public, unexported — call as
 `SLCETools.MeanFieldEngine.site_potential` etc.) is the self-contained single-site
 engine: the potential `V(e) = Σ c·Z`, the closed-form vMF draw, the general Metropolis
 draw (rotation + antipodal-flip mixture proposal), and the deterministic sphere
-quadrature for the multipole averages. Pure on-sphere math with no SCE coupling.
+quadrature for the multipole averages. Pure on-sphere math with no SLCE coupling.
 
 ```@docs
 MeanFieldEngine.site_potential

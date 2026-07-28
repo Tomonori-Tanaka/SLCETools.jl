@@ -1,6 +1,6 @@
 # SPEC — SLCETools.jl
 
-Auxiliary tooling around the SCE fitting core `SLCE.jl`. Components **consume** a
+Auxiliary tooling around the SLCE fitting core `SLCE.jl`. Components **consume** a
 fitted `SLCEModel` (or a hand-built exchange model); they never build or fit one. This file
 records the realized architecture and the planned active-learning layer.
 
@@ -9,7 +9,7 @@ records the realized architecture and the planned active-learning layer.
 `SLCETools` depends on `SLCE` and reads a fitted model **only** through its public
 surface:
 
-- `multipole_terms(model) :: Vector{MultipoleTerm}` — the flat, code-neutral per-term view
+- `spin_multipole_terms(model) :: Vector{SpinMultipoleTerm}` — the flat, code-neutral per-term view
   (raw `jϕ` coefficient, `body`, `atoms`, `shifts`, `ls`, `folded`).
 - `bilinear_terms(model) :: (; pairs, onsites, skipped)` — the bilinear (`ls=[1,1]`) /
   single-ion (`ls=[2]`) channels as Cartesian `3×3` matrices.
@@ -24,7 +24,7 @@ It never touches the SALC-basis internals (`model.basis.salc_basis.salcs`, `SALC
 src/SLCETools.jl              # module: imports + includes + the two export tiers
 src/mfa/
   engine.jl                  # module MeanFieldEngine: single-site potential, vMF / Metropolis
-                             #   draws, sphere quadrature — pure on-sphere math, no SCE coupling;
+                             #   draws, sphere quadrature — pure on-sphere math, no SLCE coupling;
                              #   exports site_potential, sample_vmf, sample_vmf_field,
                              #   sample_site_metropolis, SphereQuadrature, sphere_quadrature,
                              #   field_scale, multipole_average (the `_`-prefixed helpers stay private)
@@ -37,7 +37,7 @@ src/mfa/
                              #   (+ `_scaled_multipole_terms`, the package's single (4π)^(N/2) site)
 src/mc/
   metropolis.jl              # MetropolisSampler / MCSample: single-spin Metropolis on the joint
-                             #   Boltzmann distribution of the fitted SCE (training cell, absolute
+                             #   Boltzmann distribution of the fitted SLCE (training cell, absolute
                              #   k_B·T) — its own directory as a future extraction seam
 src/io/
   vasp.jl                    # module SLCETools.VASP: the VASP adapter — read (read_poscar /
@@ -68,7 +68,8 @@ the Julia `public` keyword so the tier is machine-checkable (`Base.ispublic`, Aq
   `mfa_site_coefficients`, `write_mfa_distributions`.
 - **Public, unexported** (`public`) — `MultipoleModel` (the full-multipole digest; usually
   built via `MFASampler(model)`); `KB_EV` (the Boltzmann constant in eV/K used by the
-  kelvin↔kT conversion); the viz plumbing `SphereGrid` / `fibonacci_sphere` /
+  kelvin↔kT conversion — **defined in `SLCE`** and merely re-published here, as is
+  `SLCE.resolve_kt`); the viz plumbing `SphereGrid` / `fibonacci_sphere` /
   `harmonic_basis` / `site_probabilities`; and the submodules `MeanFieldEngine` (engine
   primitives: `site_potential`, `sample_vmf`, `sample_vmf_field`, `sample_site_metropolis`,
   `SphereQuadrature`, `sphere_quadrature`, `field_scale`, `multipole_average`) and `VASP`.
@@ -114,13 +115,13 @@ physical conventions (`τ = T/T_MF`, `T_MF = ρ/3`, mean-field decoupling, vMF /
 Not yet implemented (no placeholder directory — created with its first file); design intent
 recorded so the package is laid out for it.
 
-An efficient SCE model-construction loop, closing the sample → label → refit cycle:
+An efficient SLCE model-construction loop, closing the sample → label → refit cycle:
 
 1. **Propose** candidate configurations with the MFA sampler at a chosen `τ` (cheap,
    physically representative), optionally targeted by an acquisition criterion.
 2. **Label** them with DFT (write inputs via `SLCETools.VASP`, run an external solver,
    read back energies / torques as spin-only `TrainingDatum`s).
-3. **Refit** the SCE model with `SLCE.fit` / `refit` on the augmented dataset.
+3. **Refit** the SLCE model with `SLCE.fit` / `refit` on the augmented dataset.
 4. **Assess** uncertainty / acquisition and iterate until a target is met.
 
 The existing `ActiveSCE.jl` (GroupARD posterior, acquisition policies, finite-T campaign

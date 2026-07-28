@@ -45,12 +45,12 @@ function MFASampler(reference::AbstractMatrix{<:Real})
     return MFASampler(_normalize_reference(reference), nothing, zeros(0, 0), 1.0, 1.0)
 end
 
-# P4: the full-multipole sampler, backed by a `MultipoleModel` (all SCE clusters / l). The
+# P4: the full-multipole sampler, backed by a `MultipoleModel` (all SLCE clusters / l). The
 # l=1 temperature scale ρ comes from the bilinear part; the draw is always Metropolis.
 function MFASampler(mf::MultipoleModel; reference::AbstractMatrix{<:Real})
     ref = _normalize_reference(reference)
-    size(ref, 2) == mf.natoms || throw(DimensionMismatch(
-        "reference has $(size(ref, 2)) atoms but the MultipoleModel has $(mf.natoms)"))
+    size(ref, 2) == mf.n_atoms || throw(DimensionMismatch(
+        "reference has $(size(ref, 2)) atoms but the MultipoleModel has $(mf.n_atoms)"))
     A = _mfa_matrix(mf.bilinear, ref)
     ρ, signdef = _perron(A)
     # lmax ≥ 1 is guaranteed here: ρ > 0 requires an l=1 bilinear channel (and every term
@@ -72,8 +72,8 @@ end
 # stationary ordered state (warns otherwise — exact for collinear isotropic references, D2).
 function MFASampler(exch::ExchangeModel; reference::AbstractMatrix{<:Real})
     ref = _normalize_reference(reference)
-    size(ref, 2) == exch.natoms || throw(DimensionMismatch(
-        "reference has $(size(ref, 2)) atoms but the ExchangeModel has $(exch.natoms)"))
+    size(ref, 2) == exch.n_atoms || throw(DimensionMismatch(
+        "reference has $(size(ref, 2)) atoms but the ExchangeModel has $(exch.n_atoms)"))
     A = _mfa_matrix(exch, ref)
     ρ, signdef = _perron(A)
     ρ > 1.0e-12 * (1 + maximum(abs.(A); init = 0.0)) || throw(ArgumentError(
@@ -268,9 +268,9 @@ function _sample_sweep(sampler::MFASampler, taus::Vector{Float64}, per::Integer,
                        rng::AbstractRNG, randomize::Bool,
                        fixed::AbstractVector{<:Integer},
                        uniform::AbstractVector{<:Integer})::MFASample
-    natoms = size(sampler.reference, 2)
-    _check_atom_indices(fixed, natoms, "fixed")
-    _check_atom_indices(uniform, natoms, "uniform")
+    nat = size(sampler.reference, 2)      # a local, not the `n_atoms` generic
+    _check_atom_indices(fixed, nat, "fixed")
+    _check_atom_indices(uniform, nat, "uniform")
     _needs_metropolis(sampler) &&
         return _sweep_metropolis(sampler, taus, per, rng, randomize, fixed, uniform)
     ref = sampler.reference

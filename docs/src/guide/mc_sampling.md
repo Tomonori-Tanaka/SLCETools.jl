@@ -5,7 +5,7 @@ CurrentModule = SLCETools
 ```
 
 [`MetropolisSampler`](@ref) is the joint-Boltzmann sibling of the mean-field
-[`MFASampler`](@ref): single-spin Metropolis on the fitted SCE Hamiltonian over its
+[`MFASampler`](@ref): single-spin Metropolis on the fitted SLCE Hamiltonian over its
 training cell, so the drawn configurations carry the model's true inter-site
 correlations. The price is a Markov chain — burn-in, thinning, and an acceptance rate to
 watch — instead of closed-form single-site draws.
@@ -138,7 +138,7 @@ configurations) with MC-native labels:
 | `.configs` | `Vector` of `3 × n_atoms` configurations (unit columns) |
 | `.kT` | each configuration's ``k_B T`` in the model's energy units |
 | `.temperature` | the same in kelvin (`= kT / SLCETools.KB_EV`; assumes an eV model) |
-| `.energy` | that configuration's SCE energy (model units, `j0` excluded) |
+| `.energy` | that configuration's SLCE energy (model units, `j0` excluded) |
 | `.acceptance` | Metropolis accept fraction over the sweeps that produced it |
 
 Use `.energy` to check equilibration (the trace should be trend-free within one

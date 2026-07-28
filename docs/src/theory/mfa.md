@@ -5,13 +5,13 @@ CurrentModule = SLCETools
 ```
 
 The sampler generates finite-temperature spin configurations from the **single-site
-mean-field** approximation (MFA) of an SCE energy surface. This page sketches why any SCE
+mean-field** approximation (MFA) of an SLCE energy surface. This page sketches why any SLCE
 model collapses to a single-site tesseral potential, and what distribution the spins are then
 drawn from.
 
-## The SCE energy and the mean-field decoupling
+## The SLCE energy and the mean-field decoupling
 
-An SCE energy is a polynomial in unit spin directions,
+An SLCE energy is a polynomial in unit spin directions,
 
 ```math
 E\bigl(\{\hat{\boldsymbol e}_a\}\bigr) = j_0 + \sum_\varphi J_\varphi\,\Phi_\varphi,
@@ -36,7 +36,7 @@ H_a(\hat{\boldsymbol e}) = \sum_{l m} h_a^{l m}\, Z_{l m}(\hat{\boldsymbol e}),
 h_a^{l m} = \sum_{\varphi \ni a} J_\varphi (4\pi)^{N/2}\,\text{folded}\;\prod_{b\neq a}\langle Z_{l_b\mu_b}(\hat{\boldsymbol e}_b)\rangle .
 ```
 
-This is the same leave-one-out contraction the SCE gradient kernel performs, with the site-``a``
+This is the same leave-one-out contraction the SLCE gradient kernel performs, with the site-``a``
 harmonic left symbolic instead of differentiated. The order parameters are the per-atom
 multipole averages ``\langle Z_{l m}\rangle_a``, solved to self-consistency.
 
@@ -78,7 +78,7 @@ over the trivial disordered solution and converges through the critical region.
 
 ## Conventions and references
 
-The reduced-temperature formulation, the rigid reference axes ``\hat{\boldsymbol e}_a``, the SCE
+The reduced-temperature formulation, the rigid reference axes ``\hat{\boldsymbol e}_a``, the SLCE
 source at full ``l_{\max}``, and the labelled output are design decisions D1–D5 recorded in the
 package `docs/specs/mfa-sampling.md`. The physical conventions (unit spins, real tesseral
 harmonics with the per-site ``(4\pi)^{-1/2}`` and per-``N`` ``(4\pi)^{N/2}`` factors) are

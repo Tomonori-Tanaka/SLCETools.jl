@@ -6,13 +6,13 @@ CurrentModule = SLCETools
 
 ## Installation
 
-SLCETools.jl is an exploratory package and is not registered. It depends on the SCE fitting
+SLCETools.jl is an exploratory package and is not registered. It depends on the SLCE fitting
 core [SLCE.jl](https://github.com/Tomonori-Tanaka/SLCE.jl); add both
 from their local paths (or git URLs) in the package manager:
 
 ```julia
 using Pkg
-Pkg.develop(path = "/path/to/SLCE.jl")   # the SCE fitting core
+Pkg.develop(path = "/path/to/SLCE.jl")   # the SLCE fitting core
 Pkg.develop(path = "/path/to/SLCETools.jl")
 ```
 

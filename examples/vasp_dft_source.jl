@@ -1,6 +1,6 @@
-# VASP → SCE end-to-end through the code-agnostic DFT-source seam: read a structure
+# VASP → SLCE end-to-end through the code-agnostic DFT-source seam: read a structure
 # from a POSCAR, read constrained-noncollinear OSZICARs into `TrainingDatum`s, and fit.
-# The point: the SCE pipeline only ever sees `TrainingDatum` / `SLCEDataset`, so the
+# The point: the SLCE pipeline only ever sees `TrainingDatum` / `SLCEDataset`, so the
 # originating DFT code is irrelevant — a different code is just a different source.
 #
 # (The POSCAR/OSZICAR files here are written synthetically as stand-ins for real VASP
@@ -62,4 +62,4 @@ basis = SLCEBasis(crystal, BasisSpec(; nbody = 2, cutoff = 2.5, lmax = [1], soc 
 dataset = SLCEDataset(basis, src)                         # source → dataset (read under the hood)
 f = fit(SLCEFit, dataset, OLS(); torque_weight = 0.3)
 println("\nfit completed on ", nobs(f), " configs, ", n_salcs(basis), " coefficient(s)")
-println("✓ the SCE pipeline saw only TrainingDatum / SLCEDataset — the VASP origin never entered it")
+println("✓ the SLCE pipeline saw only TrainingDatum / SLCEDataset — the VASP origin never entered it")

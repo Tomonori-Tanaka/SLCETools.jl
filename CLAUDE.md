@@ -6,7 +6,7 @@
 
 ## Project goal
 
-Auxiliary tooling around the SCE fitting core
+Auxiliary tooling around the SLCE fitting core
 [`SLCE.jl`](../SLCE.jl): utilities that **consume** a fitted
 `SLCEModel` rather than build one. The first component is the **mean-field (MFA)
 spin-configuration sampler** — draw physically representative finite-temperature spin
@@ -22,7 +22,7 @@ core (this package never re-derives them — it reads the fitted Hamiltonian thr
 core's public surface).
 
 This package depends on `SLCE` and reads a fitted model **only** through its
-public introspection surface — `multipole_terms`, `bilinear_terms`, `n_atoms(model)`,
+public introspection surface — `spin_multipole_terms`, `bilinear_terms`, `n_atoms(model)`,
 and the tesseral spherical-harmonic submodule `SLCE.Harmonics` (`Zlm`,
 `lm_index`) — never the SALC-basis internals (`model.basis.salc_basis.salcs`, `SALCMember`,
 `SALCTerm`). During development the dependency is a path-dev:
@@ -35,7 +35,7 @@ Inherited from the core (`SLCE`'s `CLAUDE.md`); the ones this package leans on:
 - **Spin directions are unit vectors**; configuration layout `3 × n_atoms` (rows x,y,z;
   columns atoms). The `reference` is the same layout.
 - **Real (tesseral) spherical harmonics `Zₗₘ`**, per-site factor `(4π)^(−1/2)`; an N-body
-  SCE term carries `(4π)^(N/2)`. `multipole_terms` returns the **raw** fitted `jϕ`; this
+  SLCE term carries `(4π)^(N/2)`. `spin_multipole_terms` returns the **raw** fitted `jϕ`; this
   package applies the `(4π)^(body/2)` scale once, in `_scaled_multipole_terms`
   (`mfa/bridge.jl`), shared by `MultipoleModel` and `MetropolisSampler` — never re-apply
   downstream.
@@ -47,11 +47,21 @@ Inherited from the core (`SLCE`'s `CLAUDE.md`); the ones this package leans on:
 
 ## Coupled ("linked") code sites — change one, check all
 
+- **Names this package borrows rather than owns** (`src/SLCETools.jl` header):
+  `n_atoms` is a **method of `SLCE`'s generic** (`import SLCE: n_atoms`, extended for
+  `ExchangeModel` / `MultipoleModel`), and `KB_EV` / `resolve_kt` are `using`-ed from
+  `SLCE` and merely re-published. Do not re-define them here: this package and
+  SLCEMonteCarlo each carried a private, character-for-character-identical `KB_EV`
+  until the 2026-07-28 family naming batch — two copies of a unit conversion that
+  could drift with neither suite able to see the other. A struct that counts atoms
+  spells the field `n_atoms` and gets an `n_atoms(::T)` method, so the accessor reads
+  the same on a `Crystal`, an `SLCEModel` and a coupling digest.
+
 - **`mfa/bridge.jl` ↔ the core's introspection contract** (`SLCE`'s
-  `slce/introspect.jl`): `_scaled_multipole_terms` consumes `multipole_terms` and applies
+  `slce/introspect.jl`): `_scaled_multipole_terms` consumes `spin_multipole_terms` and applies
   `coef·(4π)^(body/2)` (feeding both `MultipoleModel(model)` and
   `MetropolisSampler(model)`); `ExchangeModel(model)` consumes `bilinear_terms` (the `3×3`
-  bilinear / single-ion matrices). If a `MultipoleTerm` field or the scale convention
+  bilinear / single-ion matrices). If a `SpinMultipoleTerm` field or the scale convention
   changes upstream, this file and `mc/metropolis.jl` move with it. The regression gates
   are the P1–P4 suite (`test/unit/test_{multipole,tensorial,exchange}.jl`: exact
   reduction to the single-global Langevin curve, scale invariance, the many-body

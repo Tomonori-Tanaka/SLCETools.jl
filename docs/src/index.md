@@ -4,7 +4,7 @@
 CurrentModule = SLCETools
 ```
 
-Auxiliary tooling around the spin-cluster-expansion (SCE) fitting core
+Auxiliary tooling around the spin–lattice cluster-expansion (SLCE) fitting core
 [SLCE.jl](https://github.com/Tomonori-Tanaka/SLCE.jl) — utilities that
 **consume** a fitted `SLCEModel` rather than build one.
 
@@ -12,12 +12,12 @@ The first component is the **mean-field (MFA) spin-configuration sampler**: draw
 representative finite-temperature spin configurations from the single-site mean field of a
 fitted model (or a hand-built exchange model) at a controlled reduced temperature
 ``\tau = T/T_{\mathrm{MF}}``. Such configurations are exactly what you feed back into DFT to
-enrich an SCE training set, which is why sampling and (planned) active learning live here
+enrich an SLCE training set, which is why sampling and (planned) active learning live here
 together.
 
 !!! note "Status — companion to an architectural exploration (v0)"
     SLCETools depends on SLCE and reads a fitted model **only** through its public
-    introspection surface — [`multipole_terms`](https://github.com/Tomonori-Tanaka/SLCE.jl),
+    introspection surface — [`spin_multipole_terms`](https://github.com/Tomonori-Tanaka/SLCE.jl),
     `bilinear_terms`, `n_atoms`, and the tesseral submodule `SLCE.Harmonics` —
     never its SALC-basis internals. The sampler was developed inside SLCE (phases
     P0–P4) and extracted here when the core was narrowed to fitting only.
@@ -32,7 +32,7 @@ fidelity:
 | `MFASampler(reference)` | a single global magnetization | Langevin / von Mises–Fisher |
 | `MFASampler(ExchangeModel(Jiso); reference)` | multi-sublattice isotropic (Heisenberg) exchange | per-atom von Mises–Fisher |
 | `MFASampler(ExchangeModel(bilinear; onsite); reference)` | tensorial exchange (DMI + anisotropic) + single-ion | von Mises–Fisher / Bingham (Metropolis) |
-| `MFASampler(model::SLCEModel; reference)` | **all** SCE clusters and `l` — higher-order / many-body | full multipole (Metropolis) |
+| `MFASampler(model::SLCEModel; reference)` | **all** SLCE clusters and `l` — higher-order / many-body | full multipole (Metropolis) |
 
 The [`ExchangeModel`](@ref) carrier can be built by hand (raw couplings, or a TB2J-style
 ``J_{ij}`` tensor) or extracted from a fitted `SLCEModel`; the full
@@ -60,4 +60,4 @@ packages remain in use against the original `Magesty.jl` and are not targeted he
 
 An active-learning layer (a future `src/active_learning/` — planned, not yet implemented)
 will close an efficient model-construction loop: propose configurations with the sampler,
-label them with DFT, refit the SCE model, iterate. See the package `SPEC.md`.
+label them with DFT, refit the SLCE model, iterate. See the package `SPEC.md`.

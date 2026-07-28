@@ -3,7 +3,7 @@
 # Pure type definitions, their invariant-enforcing inner constructors, and `Base.show`. The
 # algorithms live alongside: `exchange.jl` (ExchangeModel construction + the longitudinal
 # molecular-field analysis), `selfconsistency.jl` (the mean-field solvers), `sampler.jl`
-# (the MFASampler constructors + the `sample` verb), `bridge.jl` (from a fitted SCE).
+# (the MFASampler constructors + the `sample` verb), `bridge.jl` (from a fitted SLCE).
 
 # The 3×3 identity, used by the ExchangeModel classification / isotropic builder.
 const _I3 = SMatrix{3,3,Float64}(I)
@@ -46,7 +46,7 @@ Neutral carrier of the bilinear exchange (and single-ion anisotropy) the mean-fi
 sampler needs.
 
 - `ExchangeModel(Jiso::AbstractMatrix{<:Real}; onsite)` — isotropic exchange: `Jiso[a,b]`
-  is the symmetric total Heisenberg coupling `Σ_R J_iso(a,b,R)` (sign convention of the SCE
+  is the symmetric total Heisenberg coupling `Σ_R J_iso(a,b,R)` (sign convention of the SLCE
   energy `E = Σ_{bonds} J e_a·e_b`). `onsite`, if given, is a length-`n` vector of `3×3`
   single-ion matrices `A_a` (`e' A_a e`).
 - `ExchangeModel(bilinear::AbstractMatrix{<:SMatrix{3,3}}; onsite)` — full tensorial
@@ -58,7 +58,7 @@ sampler needs.
   higher-order / higher-`l` channels are dropped (a P4 extension) and reported via `@warn`.
 """
 struct ExchangeModel
-    natoms::Int
+    n_atoms::Int
     Jiso::Matrix{Float64}                              # tr(S)/3, the isotropic part
     bilinear::Matrix{SMatrix{3,3,Float64,9}}           # S_ab: field g_a = Σ_b S_ab ⟨e_b⟩
     onsite::Vector{SMatrix{3,3,Float64,9}}             # single-ion A_a (zero ⇒ none)
@@ -103,12 +103,20 @@ struct ExchangeModel
 end
 
 Base.show(io::IO, m::ExchangeModel) =
-    print(io, "ExchangeModel(", m.natoms, " atoms", m.isotropic ? ", isotropic" : ", tensorial", ")")
+    print(io, "ExchangeModel(", m.n_atoms, " atoms", m.isotropic ? ", isotropic" : ", tensorial", ")")
+
+"""
+    n_atoms(m::ExchangeModel) -> Int
+
+Number of atoms the exchange model covers — a method of the core's `n_atoms`, so it
+reads the same on a `Crystal`, an `SLCEModel` and a coupling digest.
+"""
+n_atoms(m::ExchangeModel)::Int = m.n_atoms
 
 """
     MultipoleModel
 
-The digested full-multipole mean field of a fitted SCE (P4): every cluster term
+The digested full-multipole mean field of a fitted SLCE (P4): every cluster term
 (`_MFATerm`), the `lmax`, and the bilinear [`ExchangeModel`](@ref) (used only for the
 `l=1` temperature scale `ρ`). Built by `MultipoleModel(model::SLCEModel)`; consumed by the
 [`MFASampler`](@ref) tensorial/Metropolis path.
@@ -117,30 +125,37 @@ Renamed from `MultipoleField` (it is a coupling *model*, the full-fidelity sibli
 [`ExchangeModel`](@ref), not a field).
 """
 struct MultipoleModel
-    natoms::Int
+    n_atoms::Int
     lmax::Int
     terms::Vector{_MFATerm}
     bilinear::ExchangeModel
 
     # Inner constructor: enforce the structural invariants the mean-field solver relies on.
-    function MultipoleModel(natoms::Int, lmax::Int, terms::Vector{_MFATerm},
+    function MultipoleModel(n_atoms::Int, lmax::Int, terms::Vector{_MFATerm},
                             bilinear::ExchangeModel)
         isempty(terms) && throw(ArgumentError("MultipoleModel needs at least one term"))
-        bilinear.natoms == natoms || throw(DimensionMismatch(
-            "bilinear ExchangeModel has $(bilinear.natoms) atoms but the model has $natoms"))
+        bilinear.n_atoms == n_atoms || throw(DimensionMismatch(
+            "bilinear ExchangeModel has $(bilinear.n_atoms) atoms but the model has $n_atoms"))
         maxl = maximum(maximum(t.ls) for t in terms)
         lmax >= maxl || throw(ArgumentError("lmax=$lmax does not cover the terms' max l=$maxl"))
         @inbounds for t in terms, a in t.atoms
-            1 <= a <= natoms ||
-                throw(ArgumentError("term atom index $a outside 1:$natoms"))
+            1 <= a <= n_atoms ||
+                throw(ArgumentError("term atom index $a outside 1:$n_atoms"))
         end
-        return new(natoms, lmax, terms, bilinear)
+        return new(n_atoms, lmax, terms, bilinear)
     end
 end
 
 Base.show(io::IO, mf::MultipoleModel) =
-    print(io, "MultipoleModel(", mf.natoms, " atoms, lmax=", mf.lmax, ", ",
+    print(io, "MultipoleModel(", mf.n_atoms, " atoms, lmax=", mf.lmax, ", ",
           length(mf.terms), " terms)")
+
+"""
+    n_atoms(mf::MultipoleModel) -> Int
+
+Number of atoms the multipole digest covers (see [`n_atoms(::ExchangeModel)`](@ref)).
+"""
+n_atoms(mf::MultipoleModel)::Int = mf.n_atoms
 
 """
     MFASampler(reference) <: AbstractSampler
@@ -162,7 +177,7 @@ at the reduced temperature `τ` (or magnetization `m`), via [`sample`](@ref).
   with DMI / anisotropic exchange or single-ion anisotropy it is the general Metropolis
   draw on the Bingham single-site potential (P3).
 - `MFASampler(model; reference)` — the full-multipole sampler (P4), backed by a
-  [`MultipoleModel`](@ref) keeping every SCE channel.
+  [`MultipoleModel`](@ref) keeping every SLCE channel.
 
 The backing `source` is the coupling model the sampler draws from: `nothing` for the single
 global sampler, an [`ExchangeModel`](@ref) for the bilinear/single-ion path (P2/P3), or a

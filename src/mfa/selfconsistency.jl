@@ -173,7 +173,7 @@ end
 # — the m = 0 shortcut valid for pure l=1 would be wrong here. Same for `_multipole_state`.
 function _tensor_state(exch::ExchangeModel, ehat::Vector{SVector{3,Float64}}, ρ::Float64,
                        τ::Float64)
-    n = exch.natoms
+    n = exch.n_atoms
     β = 3 / (ρ * max(τ, _MFA_MIN_TAU))
     if τ < _MFA_MIN_TAU
         # Fully ordered limit: every atom with a molecular field or a single-ion term
@@ -220,7 +220,7 @@ function _tensor_state(exch::ExchangeModel, ehat::Vector{SVector{3,Float64}}, ρ
     return cs, m
 end
 
-# --- P4: the full multipole mean field over all SCE clusters / l --------------------
+# --- P4: the full multipole mean field over all SLCE clusters / l --------------------
 
 # Reference multipoles ⟨Z_lm⟩ = Z_lm(ê_a) (the fully ordered state), per atom, length
 # (lmax+1)² and ordered by `Harmonics.lm_index`.
@@ -279,7 +279,7 @@ end
 # magnetizations m_a = ⟨e·ê_a⟩. τ floored at _MFA_MIN_TAU so β stays finite.
 function _multipole_state(mf::MultipoleModel, ehat::Vector{SVector{3,Float64}}, ρ::Float64,
                           τ::Float64)
-    n = mf.natoms
+    n = mf.n_atoms
     lmax = mf.lmax
     nlm = (lmax + 1)^2
     β = 3 / (ρ * max(τ, _MFA_MIN_TAU))

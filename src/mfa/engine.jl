@@ -6,7 +6,7 @@
 #
 # where `c` is the already-β-scaled generalized-field coefficient vector indexed by
 # `Harmonics.lm_index(l, m)` (length `(lmax+1)²`; the `l = 0` entry, a constant shift,
-# is ignored). Mean-field decoupling of any SCE term — any body order, any `l` — folds
+# is ignored). Mean-field decoupling of any SLCE term — any body order, any `l` — folds
 # into such a `V`, so one engine covers every case (spec §1.1).
 #
 # Provides: the potential `site_potential`; a closed-form von Mises–Fisher draw
@@ -15,7 +15,7 @@
 # (`sphere_quadrature` / `multipole_average`) for the multipole averages `⟨Z_lm⟩` the
 # self-consistency (P1+) needs. RNG is always an explicit `AbstractRNG`.
 #
-# Self-contained submodule: pure on-sphere mean-field math with no SCE coupling, depending
+# Self-contained submodule: pure on-sphere mean-field math with no SLCE coupling, depending
 # only on the core's tesseral harmonics. Mirrors `SLCE`'s numeric-kernel submodules
 # (`Harmonics`, `AngularMomentum`). The parent re-binds the names it needs with
 # `using .MeanFieldEngine: …`; the primitives are also reachable as `SLCETools.MeanFieldEngine.*`.

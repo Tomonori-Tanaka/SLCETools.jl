@@ -1,9 +1,9 @@
 # P4 of the mean-field sampler (docs/specs/mfa-sampling.md): the full multipole MFA over all
-# SCE clusters and l (`MultipoleModel` / `MFASampler(model::SLCEModel)`). Validates that the
+# SLCE clusters and l (`MultipoleModel` / `MFASampler(model::SLCEModel)`). Validates that the
 # many-body factorization `h_a^{lm} = Σ_φ jφ folded ∏_{b≠a} ⟨Z_b⟩` is built correctly — by
 # the exact reduction to the single-global Langevin curve for a pure-bilinear model, by
 # scale invariance, and (the headline higher-order check) by matching the single-site
-# potential to the conditional mean SCE energy ⟨E | e_a⟩ of a biquadratic model.
+# potential to the conditional mean SLCE energy ⟨E | e_a⟩ of a biquadratic model.
 
 using Test
 using SLCE
@@ -37,7 +37,7 @@ end
 @testset "full multipole sampler (P4)" begin
     @testset "MultipoleModel construction" begin
         mf1 = MultipoleModel(_dimer_model())
-        @test mf1.natoms == 4
+        @test mf1.n_atoms == 4
         @test mf1.lmax == 1
         # one canonical member per physical bond (SLCE v4 canonical members,
         # both directed contributions pre-summed into its folded tensor)
@@ -51,12 +51,12 @@ end
         mf = MultipoleModel(_dimer_model())
         t = mf.terms[1]
         # lmax must cover the terms' max l
-        @test_throws ArgumentError MultipoleModel(mf.natoms, 0, mf.terms, mf.bilinear)
+        @test_throws ArgumentError MultipoleModel(mf.n_atoms, 0, mf.terms, mf.bilinear)
         # bilinear atom count must match
-        bad = ExchangeModel(zeros(mf.natoms + 1, mf.natoms + 1))
-        @test_throws DimensionMismatch MultipoleModel(mf.natoms, mf.lmax, mf.terms, bad)
+        bad = ExchangeModel(zeros(mf.n_atoms + 1, mf.n_atoms + 1))
+        @test_throws DimensionMismatch MultipoleModel(mf.n_atoms, mf.lmax, mf.terms, bad)
         # no terms
-        @test_throws ArgumentError MultipoleModel(mf.natoms, mf.lmax, SLCETools._MFATerm[],
+        @test_throws ArgumentError MultipoleModel(mf.n_atoms, mf.lmax, SLCETools._MFATerm[],
                                                   mf.bilinear)
     end
 
