@@ -22,7 +22,7 @@ using Printf
 using StaticArrays
 using LinearAlgebra: norm, det
 using SLCE: Crystal, Lattice, AbstractDFTSource, TrainingDatum, DatumProvenance,
-            SpinDatum, n_atoms
+            spin_datum, n_atoms
 import SLCE: read_configs
 
 export read_poscar, write_poscar, Oszicar, write_incar, write_inputs
@@ -322,13 +322,13 @@ function read_configs(src::Oszicar)::Vector{TrainingDatum}
         field = _oszicar_field(path, size(moments, 2))
         if field === nothing
             prov = DatumProvenance(; setup_id = src.setup_id)
-            data[i] = SpinDatum(energy, R * moments; provenance = prov)
+            data[i] = spin_datum(energy, R * moments; provenance = prov)
         else
-            c = any(!iszero, field)          # same derivation as SpinDatum's default
+            c = any(!iszero, field)          # same derivation as spin_datum's default
             prov = DatumProvenance(; constrained = c, torque_qualified = c,
                                    setup_id = src.setup_id)
             # SAXIS → Cartesian frame (spin channels only)
-            data[i] = SpinDatum(energy, R * moments, R * field; provenance = prov)
+            data[i] = spin_datum(energy, R * moments, R * field; provenance = prov)
         end
     end
     return data

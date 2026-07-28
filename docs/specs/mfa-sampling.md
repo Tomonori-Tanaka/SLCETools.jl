@@ -231,7 +231,7 @@ exposes `T_MF` so a caller can convert `T = τ·T_MF` if they trust the coupling
 Per τ, with the converged `h_a^{lm}`: draw `nsamples` configurations, each spin `a`
 independently from `P(e_a) ∝ exp(−β H_a^MF(e_a))` via the `:vmf` fast path
 (`l = 1`-only site) or `:metropolis` (otherwise). Per-atom magnitudes are irrelevant
-(configs are unit directions; magnitude is stored separately in `SpinDatum`).
+(configs are unit directions; magnitude is stored separately in `spin_datum`).
 
 ---
 

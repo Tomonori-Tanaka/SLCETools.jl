@@ -141,14 +141,14 @@ end
             " ion MW_int M_int\n   1 1.0 0.0 0.0 1.0 0.0 0.0\n")))   # no F= line
     end
 
-    @testset "SpinDatum — direct construction, zero-moment placeholder" begin
+    @testset "spin_datum — direct construction, zero-moment placeholder" begin
         moments = [1.0 0.0; 0.0 0.0; 0.0 0.0]              # atom 2 has zero moment
         field = [0.0 0.0; 0.5 0.0; 0.0 0.0]
-        d = SpinDatum(-1.0, moments, field)
+        d = spin_datum(-1.0, moments, field)
         @test d.magmoms ≈ [1.0, 0.0]
         @test d.directions[:, 2] ≈ [0.0, 0.0, 1.0]        # placeholder ẑ for the null moment
         @test d.torques[:, 2] ≈ [0.0, 0.0, 0.0]
-        @test_throws ArgumentError SpinDatum(0.0, [1.0; 2.0;;], [1.0; 2.0;;])   # not 3×n
+        @test_throws ArgumentError spin_datum(0.0, [1.0; 2.0;;], [1.0; 2.0;;])   # not 3×n
     end
 
     @testset "DFT-source seam → SLCEDataset (code-agnostic)" begin

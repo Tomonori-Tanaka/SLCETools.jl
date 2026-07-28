@@ -106,7 +106,7 @@ Inherited from the core (`SLCE`'s `CLAUDE.md`); the ones this package leans on:
   MAGMOM under `constrain`. (4) The **torque sign / TrainingDatum layout** is owned upstream by
   `SLCE`'s `dftsource.jl` (`τ_a = m_a × B_a`); the OSZICAR reader must keep producing
   that. (5) **Absent ≠ zero**: an OSZICAR with no `lambda*MW_perp` block yields
-  `field = nothing` (2-arg `SpinDatum`, `torque_qualified = false`) — never a fabricated
+  `field = nothing` (2-arg `spin_datum`, `torque_qualified = false`) — never a fabricated
   zero-filled field, which would claim `τ = 0` was observed and admit false torque rows
   into a co-fit; a present block with zero rows means "computed, those atoms
   unconstrained". `Oszicar(...; setup_id = ...)` stamps the computational-setup label
