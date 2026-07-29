@@ -112,6 +112,9 @@ end
     end
 
     @testset "Metropolis draw reproduces the full multipole self-consistency" begin
+        # Cross-METHOD consistency (sampler vs quadrature over the same converged
+        # coefficients), not an independent oracle: a wrong field passes here and
+        # is caught by the factorization gate against upstream `predict_energy`.
         model = _biquadratic_model(0)
         mf = MultipoleModel(model)
         ref = Float64[0 0; 0 0; 1 1]

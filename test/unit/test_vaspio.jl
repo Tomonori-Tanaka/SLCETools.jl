@@ -121,6 +121,18 @@ end
         @test dx.field[:, 2] ≈ R * d0.field[:, 2]
         @test dx.torques[:, 1] ≈ cross(SVector(dx.magmoms[1] * dx.directions[:, 1]...),
                                        SVector(dx.field[:, 1]...))
+        # A GENERIC-azimuth anchor (α ≠ 0): every other SAXIS in the suite has
+        # sy = 0, so the Rz(α) branch would otherwise never meet an independent
+        # value — the writer/reader round-trips share `_saxis_rotation` and prove
+        # only R·Rᵀ = I. Hand-derived from the VASP manual's m_xyz(m') formula
+        # (its matrix IS Rz(α)·Ry(β), α = atan(sy, sx), β = atan(√(sx²+sy²), sz)):
+        # saxis = (0, 1, 0) ⇒ α = β = π/2 ⇒
+        #   Rz(π/2)·Ry(π/2) = [0 −1 0; 1 0 0; 0 0 1]·[0 0 1; 0 1 0; −1 0 0]
+        #                   = [0 −1 0; 0 0 1; −1 0 0]      (ẑ′ ↦ ŷ, as it must)
+        dy = read_configs(Oszicar(p; saxis = [0.0, 1.0, 0.0]))[1]
+        Ry90z90 = SMatrix{3,3,Float64}([0 -1 0; 0 0 1; -1 0 0])
+        @test dy.directions[:, 1] ≈ Ry90z90 * d0.directions[:, 1]
+        @test dy.field[:, 2] ≈ Ry90z90 * d0.field[:, 2]
     end
 
     @testset "OSZICAR — multiple files, missing field, errors" begin

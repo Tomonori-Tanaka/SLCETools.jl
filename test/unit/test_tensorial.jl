@@ -55,6 +55,10 @@ _mean_Z(l, m, configs, a) = mean(_Z(l, m, c[:, a]) for c in configs)
     end
 
     @testset "Metropolis draw reproduces the quadrature self-consistency" begin
+        # Cross-METHOD consistency (stochastic vs deterministic integration of
+        # the same converged field), not an independent oracle: both sides read
+        # `_tensor_state`'s coefficients, so a wrong single-site field passes
+        # here — it is caught by the rotational-covariance gate below instead.
         A = SMatrix{3,3,Float64}(1, 0, 0, 0, 1, 0, 0, 0, -2)
         s = MFASampler(ExchangeModel([0.0 -1.0; -1.0 0.0]; onsite = [A, A]);
                        reference = Float64[0 0; 0 0; 1 1])
