@@ -6,6 +6,18 @@ release, so everything lives under *Unreleased*.
 
 ## [Unreleased]
 
+### Changed — internal names spelled out (no public surface touched)
+
+The `STYLE_GUIDE.md` §1 naming contract's safe tier, applied: internal locals and
+private helper functions now spell their words out. Nothing exported, nothing in the
+`public` tier, no struct field and no persisted key changed, so this is invisible to
+every caller and to every file on disk; the suites are green at the same counts.
+
+Locals: `cfg` → `config`, `idx` → `index`. The Unicode transliterations (`Abar`,
+`ehat`) and the physics locals stay as `STYLE_GUIDE.md` §2 mandates.
+
+`STYLE_GUIDE.md` §1.9 records what was renamed and what deliberately was not.
+
 ### Fixed — `multipole_average` overflowed to `NaN` on a strong single-site field
 
 `exp(-V)` was accumulated without a shift, so once `max(-V)` passed 709 the

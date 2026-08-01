@@ -60,12 +60,12 @@ _mc_rand_config(rng, n) = reduce(hcat, [Vector(MR._random_unit(rng)) for _ = 1:n
         s = MetropolisSampler(model)
         nlm = (s.lmax + 1)^2
         rng = MersenneTwister(7)
-        cfg = _mc_rand_config(rng, s.n_atoms)
-        Z = [MR._zlm_row!(zeros(nlm), SVector{3,Float64}(cfg[:, a]), s.lmax)
+        config = _mc_rand_config(rng, s.n_atoms)
+        Z = [MR._zlm_row!(zeros(nlm), SVector{3,Float64}(config[:, a]), s.lmax)
              for a = 1:s.n_atoms]
 
         # the total contraction reproduces predict_energy − j0 (fixture j0 = 0)
-        @test MR._total_energy(s.terms, Z) ≈ predict_energy(model, cfg) atol = 1e-12
+        @test MR._total_energy(s.terms, Z) ≈ predict_energy(model, config) atol = 1e-12
 
         for a = 1:s.n_atoms
             # single-site coefficients ≡ the a-th row of the mean-field all-sites build (β=1)
@@ -83,10 +83,10 @@ _mc_rand_config(rng, n) = reduce(hcat, [Vector(MR._random_unit(rng)) for _ = 1:n
             e2 = MR._random_unit(rng)
             znew = MR._zlm_row!(zeros(nlm), e2, s.lmax)
             ΔE = dot(c, znew - Z[a])
-            cfg2 = copy(cfg)
+            cfg2 = copy(config)
             cfg2[:, a] = e2
-            @test ΔE ≈ MR._config_energy(s, cfg2) - MR._config_energy(s, cfg) atol = 1e-12
-            @test ΔE ≈ predict_energy(model, cfg2) - predict_energy(model, cfg) atol = 1e-12
+            @test ΔE ≈ MR._config_energy(s, cfg2) - MR._config_energy(s, config) atol = 1e-12
+            @test ΔE ≈ predict_energy(model, cfg2) - predict_energy(model, config) atol = 1e-12
         end
     end
 

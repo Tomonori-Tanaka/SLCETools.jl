@@ -151,17 +151,17 @@ end
                                         folded::Array{Float64,D},
                                         Z::Vector{Vector{Float64}}) where {D}
     i = findfirst(==(a), atoms)::Int
-    @inbounds for idx in CartesianIndices(folded)
-        w = coef * folded[idx]
+    @inbounds for index in CartesianIndices(folded)
+        w = coef * folded[index]
         w == 0.0 && continue
         p = 1.0
         for k = 1:D
             k == i && continue
-            μk = idx[k] - ls[k] - 1
+            μk = index[k] - ls[k] - 1
             p *= Z[atoms[k]][Harmonics.lm_index(ls[k], μk)]
         end
         p == 0.0 && continue
-        μi = idx[i] - ls[i] - 1
+        μi = index[i] - ls[i] - 1
         c[Harmonics.lm_index(ls[i], μi)] += w * p
     end
     return c
@@ -172,12 +172,12 @@ end
                               folded::Array{Float64,D},
                               Z::Vector{Vector{Float64}})::Float64 where {D}
     E = 0.0
-    @inbounds for idx in CartesianIndices(folded)
-        w = folded[idx]
+    @inbounds for index in CartesianIndices(folded)
+        w = folded[index]
         w == 0.0 && continue
         p = 1.0
         for k = 1:D
-            μk = idx[k] - ls[k] - 1
+            μk = index[k] - ls[k] - 1
             p *= Z[atoms[k]][Harmonics.lm_index(ls[k], μk)]
         end
         E += w * p
@@ -258,18 +258,18 @@ function _mc_initial_config(s::MetropolisSampler,
                             init::Union{Nothing,AbstractMatrix{<:Real}},
                             rng::AbstractRNG)::Matrix{Float64}
     if init !== nothing
-        cfg = _normalize_reference(init)
-        size(cfg, 2) == s.n_atoms || throw(DimensionMismatch(
-            "init has $(size(cfg, 2)) atoms but the sampler has $(s.n_atoms)"))
-        return cfg
+        config = _normalize_reference(init)
+        size(config, 2) == s.n_atoms || throw(DimensionMismatch(
+            "init has $(size(config, 2)) atoms but the sampler has $(s.n_atoms)"))
+        return config
     end
     s.reference === nothing || return copy(s.reference)
-    cfg = Matrix{Float64}(undef, 3, s.n_atoms)
+    config = Matrix{Float64}(undef, 3, s.n_atoms)
     for a = 1:s.n_atoms
         u = _random_unit(rng)
-        cfg[1, a], cfg[2, a], cfg[3, a] = u[1], u[2], u[3]
+        config[1, a], config[2, a], config[3, a] = u[1], u[2], u[3]
     end
-    return cfg
+    return config
 end
 
 # The kelvin / kT resolution is `SLCE.resolve_kt` (imported at the top of the package).

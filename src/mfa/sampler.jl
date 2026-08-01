@@ -142,8 +142,8 @@ _ehat(s::MFASampler)::Vector{SVector{3,Float64}} =
      for a = 1:_natoms(s)]
 
 # Validate 1-based atom indices against the atom count.
-function _check_atom_indices(idx::AbstractVector{<:Integer}, n::Int, name::AbstractString)
-    for i in idx
+function _check_atom_indices(index::AbstractVector{<:Integer}, n::Int, name::AbstractString)
+    for i in index
         (1 <= i <= n) || throw(ArgumentError("$name entry $i is outside 1:$n"))
     end
     return nothing
