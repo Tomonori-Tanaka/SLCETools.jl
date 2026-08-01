@@ -29,16 +29,16 @@ _unit(v) = v / norm(v)
     lat = Lattice([4.0 0 0; 0 4.0 0; 0 0 4.0])
     cr  = Crystal(lat, [0.0 0.25 0.5; 0.0 0.25 0.5; 0.0 0.25 0.5], [2, 1, 2], ["A", "B"])
     # model-order directions (unit columns)
-    cfg = mapreduce(_ -> _unit(randn(rng, 3)), hcat, 1:3)
+    config = mapreduce(_ -> _unit(randn(rng, 3)), hcat, 1:3)
 
     @testset "write_incar: MAGMOM = magmom · direction, %.9f, double-spaced" begin
         p = tempname()
-        V.write_incar(p, cfg; magmoms = [3.0, 1.0, 3.0], constrain = false)
+        V.write_incar(p, config; magmoms = [3.0, 1.0, 3.0], constrain = false)
         mag = incar_floats(p, "MAGMOM")
         @test length(mag) == 9
         M = reshape(mag, 3, 3)
         for a = 1:3
-            @test M[:, a] ≈ [3.0, 1.0, 3.0][a] .* cfg[:, a] atol = 1e-9
+            @test M[:, a] ≈ [3.0, 1.0, 3.0][a] .* config[:, a] atol = 1e-9
         end
         @test incar_floats(p, "M_CONSTR") === nothing       # constrain = false ⇒ no M_CONSTR
         @test occursin(r"-?\d+\.\d{9}\b", read(p, String))  # nine-decimal formatting
@@ -46,13 +46,13 @@ _unit(v) = v / norm(v)
 
     @testset "constrain ⇒ M_CONSTR equals MAGMOM + I_CONSTRAINED_M / LAMBDA" begin
         p = tempname()
-        V.write_incar(p, cfg; magmoms = 2.5, constrain = true, i_constrained_m = 1, lambda = 5.0)
+        V.write_incar(p, config; magmoms = 2.5, constrain = true, i_constrained_m = 1, lambda = 5.0)
         @test incar_floats(p, "MAGMOM") ≈ incar_floats(p, "M_CONSTR")
         @test incar_floats(p, "I_CONSTRAINED_M") == [1.0]
         @test incar_floats(p, "LAMBDA") == [5.0]
         @test occursin("LNONCOLLINEAR = .TRUE.", read(p, String))
         # scalar magmoms ⇒ uniform magnitude
-        @test reshape(incar_floats(p, "MAGMOM"), 3, 3)[:, 1] ≈ 2.5 .* cfg[:, 1] atol = 1e-9
+        @test reshape(incar_floats(p, "MAGMOM"), 3, 3)[:, 1] ≈ 2.5 .* config[:, 1] atol = 1e-9
     end
 
     @testset "template passthrough: other tags kept, magnitudes from template MAGMOM" begin
@@ -67,7 +67,7 @@ _unit(v) = v / norm(v)
         MAGMOM = 0.0 0.0 3.0  0.0 0.0 1.0  0.0 0.0 3.0
         """
         p = tempname()
-        V.write_incar(p, cfg; base = base, constrain = true)
+        V.write_incar(p, config; base = base, constrain = true)
         txt = read(p, String)
         @test occursin("ENCUT = 520", txt)                  # preserved verbatim
         @test occursin("RWIGS = 1.30 1.30", txt)
@@ -76,26 +76,61 @@ _unit(v) = v / norm(v)
         M = reshape(incar_floats(p, "MAGMOM"), 3, 3)
         for a = 1:3
             @test norm(M[:, a]) ≈ [3.0, 1.0, 3.0][a] atol = 1e-9
-            @test M[:, a] ≈ [3.0, 1.0, 3.0][a] .* cfg[:, a] atol = 1e-9
+            @test M[:, a] ≈ [3.0, 1.0, 3.0][a] .* config[:, a] atol = 1e-9
         end
         @test incar_floats(p, "M_CONSTR") ≈ incar_floats(p, "MAGMOM")   # overwritten, not duplicated
         @test count(l -> occursin("MAGMOM", l), collect(eachline(p))) == 1
     end
 
+    @testset "a `;`-joined template line: its MAGMOM is consumed, its neighbours survive" begin
+        # VASP allows several tags on one line separated by `;`, and resolves a tag at its
+        # FIRST occurrence. A MAGMOM riding on such a line used to be neither recognized
+        # nor dropped: it survived into the output ahead of the appended one, so the run
+        # used the template's moments while M_CONSTR (a unique tag) constrained toward the
+        # sampled ones — an internally inconsistent input, silently produced.
+        base = "ENCUT = 400\nISPIN = 2 ; MAGMOM = 0 0 3  0 0 1  0 0 3\nI_CONSTRAINED_M = 1\n"
+        p = tempname()
+        V.write_incar(p, config; base = base, constrain = true)
+        @test count(l -> occursin("MAGMOM", l), collect(eachline(p))) == 1
+        @test occursin("ISPIN = 2", read(p, String))          # the neighbour tag survives
+        M = reshape(incar_floats(p, "MAGMOM"), 3, 3)          # magnitudes came from the template
+        for a = 1:3
+            @test norm(M[:, a]) ≈ [3.0, 1.0, 3.0][a] atol = 1e-9
+        end
+        @test incar_floats(p, "M_CONSTR") ≈ incar_floats(p, "MAGMOM")
+        # A `;`-joined line carrying no moment tag is still passed through verbatim,
+        # trailing comment included — only a line we take something out of is rewritten.
+        base2 = "ISPIN = 2 ; NSW = 0  # both\nMAGMOM = 0 0 2  0 0 2  0 0 2\n"
+        p2 = tempname()
+        V.write_incar(p2, config; base = base2)
+        @test occursin("ISPIN = 2 ; NSW = 0  # both", read(p2, String))
+    end
+
+    @testset "a `;`-joined SAXIS is overridden, not duplicated" begin
+        base = "ISPIN = 2 ; SAXIS = 0 0 1 ; NSW = 0\nMAGMOM = 0 0 2  0 0 2  0 0 2\n"
+        p = tempname()
+        @test_logs (:warn,) match_mode = :any V.write_incar(p, config; base = base,
+                                                            saxis = (0.0, 1.0, 0.0))
+        txt = read(p, String)
+        @test count(l -> occursin("SAXIS", l), collect(eachline(p))) == 1
+        @test incar_floats(p, "SAXIS") ≈ [0.0, 1.0, 0.0]      # the kwarg won
+        @test occursin("ISPIN = 2", txt) && occursin("NSW = 0", txt)   # neighbours survive
+    end
+
     @testset "template without I_CONSTRAINED_M warns under constrain" begin
         base = "ENCUT = 400\nMAGMOM = 0 0 2  0 0 2  0 0 2\n"
         p = tempname()
-        @test_logs (:warn,) match_mode = :any V.write_incar(p, cfg; base = base, constrain = true)
+        @test_logs (:warn,) match_mode = :any V.write_incar(p, config; base = base, constrain = true)
     end
 
     @testset "SAXIS frame: write rotates out, the reader's rotation recovers the moments" begin
         p = tempname()
         saxis = (1.0, 0.0, 1.0)
-        V.write_incar(p, cfg; magmoms = [2.0, 2.0, 2.0], constrain = false, saxis = saxis)
+        V.write_incar(p, config; magmoms = [2.0, 2.0, 2.0], constrain = false, saxis = saxis)
         Mframe = reshape(incar_floats(p, "MAGMOM"), 3, 3)
         R = V._saxis_rotation(saxis)                          # reader: SAXIS frame → Cartesian
         for a = 1:3
-            @test (R * Mframe[:, a]) ≈ 2.0 .* cfg[:, a] atol = 1e-9
+            @test (R * Mframe[:, a]) ≈ 2.0 .* config[:, a] atol = 1e-9
         end
         @test V._parse_floats(match(r"SAXIS\s*=(.*)", read(p, String)).captures[1]) ≈ [1, 0, 1]
     end
@@ -103,11 +138,11 @@ _unit(v) = v / norm(v)
     @testset "SAXIS taken from the template frame (no kwarg needed)" begin
         base = "SAXIS = 1.0 0.0 1.0\nMAGMOM = 0 0 2  0 0 2  0 0 2\nI_CONSTRAINED_M = 1\n"
         p = tempname()
-        V.write_incar(p, cfg; base = base, constrain = false)   # no saxis kwarg → use template's
+        V.write_incar(p, config; base = base, constrain = false)   # no saxis kwarg → use template's
         Mframe = reshape(incar_floats(p, "MAGMOM"), 3, 3)
         R = V._saxis_rotation((1.0, 0.0, 1.0))
         for a = 1:3
-            @test (R * Mframe[:, a]) ≈ 2.0 .* cfg[:, a] atol = 1e-9   # magnitude 2 from template
+            @test (R * Mframe[:, a]) ≈ 2.0 .* config[:, a] atol = 1e-9   # magnitude 2 from template
         end
         @test count(l -> occursin("SAXIS", l), collect(eachline(p))) == 1   # not duplicated
     end
@@ -115,20 +150,20 @@ _unit(v) = v / norm(v)
     @testset "SAXIS kwarg overrides a disagreeing template SAXIS (with a warning)" begin
         base = "SAXIS = 1.0 0.0 1.0\nMAGMOM = 0 0 2  0 0 2  0 0 2\nI_CONSTRAINED_M = 1\n"
         p = tempname()
-        @test_logs (:warn,) match_mode = :any V.write_incar(p, cfg; base = base,
+        @test_logs (:warn,) match_mode = :any V.write_incar(p, config; base = base,
                                                             constrain = false, saxis = (0, 0, 1))
         # the declared SAXIS must be the kwarg's (default frame ⇒ no SAXIS line), and the moments
         # are written in that same frame — exactly one consistent frame in the file.
         @test count(l -> occursin("SAXIS", l), collect(eachline(p))) == 0
         Mframe = reshape(incar_floats(p, "MAGMOM"), 3, 3)
         for a = 1:3
-            @test Mframe[:, a] ≈ 2.0 .* cfg[:, a] atol = 1e-9   # default frame: no rotation
+            @test Mframe[:, a] ≈ 2.0 .* config[:, a] atol = 1e-9   # default frame: no rotation
         end
     end
 
     @testset "write_inputs: POSCAR + INCAR consistent, atom order grouped by species" begin
         dir = mktempdir()
-        V.write_inputs(dir, cr, cfg; magmoms = Dict("A" => 3.0, "B" => 1.0), constrain = true)
+        V.write_inputs(dir, cr, config; magmoms = Dict("A" => 3.0, "B" => 1.0), constrain = true)
         @test isfile(joinpath(dir, "POSCAR"))
         @test isfile(joinpath(dir, "INCAR"))
 
@@ -139,7 +174,7 @@ _unit(v) = v / norm(v)
         permmag = [Dict("A" => 3.0, "B" => 1.0)[cr.species_labels[cr.species[a]]] for a in perm]
         M = reshape(incar_floats(joinpath(dir, "INCAR"), "MAGMOM"), 3, n_atoms(cr))
         for k = 1:n_atoms(cr)
-            @test M[:, k] ≈ permmag[k] .* cfg[:, perm[k]] atol = 1e-9
+            @test M[:, k] ≈ permmag[k] .* config[:, perm[k]] atol = 1e-9
         end
     end
 
@@ -147,8 +182,8 @@ _unit(v) = v / norm(v)
         d1 = mktempdir(); d2 = mktempdir()
         # species [2,1,2] over labels ["A","B"] ⇒ atoms are B, A, B in model order.
         permatom = [Dict("A" => 3.0, "B" => 1.0)[cr.species_labels[cr.species[a]]] for a = 1:3]
-        V.write_inputs(d1, cr, cfg; magmoms = permatom, constrain = false)             # per-atom
-        V.write_inputs(d2, cr, cfg; magmoms = Dict("A" => 3.0, "B" => 1.0), constrain = false)  # per-species
+        V.write_inputs(d1, cr, config; magmoms = permatom, constrain = false)             # per-atom
+        V.write_inputs(d2, cr, config; magmoms = Dict("A" => 3.0, "B" => 1.0), constrain = false)  # per-species
         @test incar_floats(joinpath(d1, "INCAR"), "MAGMOM") ≈
               incar_floats(joinpath(d2, "INCAR"), "MAGMOM")
     end
@@ -156,7 +191,7 @@ _unit(v) = v / norm(v)
     @testset "write_inputs: per-species map and a SAXIS frame compose (order then rotate)" begin
         d = mktempdir()
         saxis = (1.0, 0.0, 1.0)
-        V.write_inputs(d, cr, cfg; magmoms = Dict("A" => 3.0, "B" => 1.0),
+        V.write_inputs(d, cr, config; magmoms = Dict("A" => 3.0, "B" => 1.0),
                        constrain = false, saxis = saxis)
         p = joinpath(d, "INCAR")
         Mframe = reshape(incar_floats(p, "MAGMOM"), 3, 3)
@@ -164,7 +199,7 @@ _unit(v) = v / norm(v)
         perm = V._poscar_order(cr)                    # INCAR rows are in POSCAR (species-grouped) order
         mag = Dict("A" => 3.0, "B" => 1.0)
         for (col, a) in enumerate(perm)
-            want = mag[cr.species_labels[cr.species[a]]] .* cfg[:, a]
+            want = mag[cr.species_labels[cr.species[a]]] .* config[:, a]
             @test (R * Mframe[:, col]) ≈ want atol = 1e-9   # magnitude resolved, then frame-rotated
         end
     end
@@ -181,7 +216,7 @@ _unit(v) = v / norm(v)
 
     @testset "extra tags: appended verbatim, Bool as .TRUE./.FALSE." begin
         p = tempname()
-        V.write_incar(p, cfg; magmoms = 2.0, constrain = false,
+        V.write_incar(p, config; magmoms = 2.0, constrain = false,
                       extra = ["LSORBIT" => true, "ENCUT" => 500, "ALGO" => "Fast"])
         txt = read(p, String)
         @test occursin("LSORBIT = .TRUE.", txt)
@@ -191,18 +226,18 @@ _unit(v) = v / norm(v)
 
     @testset "errors" begin
         p = tempname()
-        @test_throws ArgumentError V.write_incar(p, cfg)            # no magmoms, no template
-        @test_throws ArgumentError V.write_incar(p, cfg; magmoms = [1.0, 2.0])   # wrong length
-        @test_throws ArgumentError V.write_incar(p, cfg; magmoms = Dict("A" => 1.0))  # needs crystal
-        @test_throws ArgumentError V.write_incar(p, cfg; magmoms = [1.0, -2.0, 1.0])  # negative magnitude
-        @test_throws ArgumentError V.write_incar(p, cfg; magmoms = 1.0, base = "/no/such/INCAR.template")  # bad path
-        @test_throws ArgumentError V.write_inputs(mktempdir(), cr, cfg;
+        @test_throws ArgumentError V.write_incar(p, config)            # no magmoms, no template
+        @test_throws ArgumentError V.write_incar(p, config; magmoms = [1.0, 2.0])   # wrong length
+        @test_throws ArgumentError V.write_incar(p, config; magmoms = Dict("A" => 1.0))  # needs crystal
+        @test_throws ArgumentError V.write_incar(p, config; magmoms = [1.0, -2.0, 1.0])  # negative magnitude
+        @test_throws ArgumentError V.write_incar(p, config; magmoms = 1.0, base = "/no/such/INCAR.template")  # bad path
+        @test_throws ArgumentError V.write_inputs(mktempdir(), cr, config;
                                                   magmoms = Dict("A" => 3.0))    # missing "B"
-        @test_throws ArgumentError V.write_inputs(mktempdir(), cr, cfg[:, 1:2];
+        @test_throws ArgumentError V.write_inputs(mktempdir(), cr, config[:, 1:2];
                                                   magmoms = 1.0)                 # wrong atom count
         @test_throws ArgumentError V._saxis_rotation((0.0, 0.0, 0.0))            # zero SAXIS
         # template MAGMOM with the wrong atom count cannot supply the magnitudes
-        @test_throws ArgumentError V.write_incar(p, cfg;
+        @test_throws ArgumentError V.write_incar(p, config;
                                                  base = "MAGMOM = 0 0 2  0 0 2\n")
     end
 end

@@ -84,14 +84,16 @@ function read_poscar(path::AbstractString)::Crystal
     toks6 = split(strip(lines[6]))
     counts = map(t -> tryparse(Int, t), toks6)
     local labels::Vector{String}, numbers::Vector{Int}, coordline::Int
-    if all(!isnothing, counts) && all(c -> c > 0, counts)
+    # `!isempty` is load-bearing: `all` is vacuously true on an empty token vector, so a
+    # blank line 6 used to take the VASP4 branch and return a silent zero-atom `Crystal`.
+    if !isempty(counts) && all(!isnothing, counts) && all(c -> c > 0, counts)
         numbers = Int[c for c in counts]                # VASP4: no symbols line
         labels = String["X$i" for i = 1:length(numbers)]
         coordline = 7
     else
         labels = String.(toks6)                         # VASP5: symbols then counts
         cnt = map(t -> tryparse(Int, t), split(strip(lines[7])))
-        all(!isnothing, cnt) && all(c -> c > 0, cnt) ||
+        !isempty(cnt) && all(!isnothing, cnt) && all(c -> c > 0, cnt) ||
             throw(ArgumentError("bad atom counts on POSCAR line 7: $(lines[7])"))
         numbers = Int[c for c in cnt]
         coordline = 8
@@ -220,7 +222,7 @@ end
 Oszicar(path::AbstractString; kwargs...) = Oszicar([path]; kwargs...)
 
 # Final-step energy and per-atom moment vectors (3 × n_atoms) from one OSZICAR. The moment block
-# is the `ion … MW_int … M_int` table (7 columns: idx + MW_int xyz + M_int xyz); it ends at a `:`
+# is the `ion … MW_int … M_int` table (7 columns: index + MW_int xyz + M_int xyz); it ends at a `:`
 # line or any non-7-column line (e.g. the `… F= … E0= …` summary). The last committed block /
 # last `F=` line (final ionic step) wins.
 function _oszicar_energy_moments(path::AbstractString, energy_kind::Symbol, mint::Bool)
@@ -266,7 +268,7 @@ function _oszicar_energy_moments(path::AbstractString, energy_kind::Symbol, mint
 end
 
 # Per-atom constraining field (3 × n_atoms) from the `lambda*MW_perp` block; rows are
-# `idx Bx By Bz`, only for constrained atoms (others stay zero). The last block wins. A
+# `index Bx By Bz`, only for constrained atoms (others stay zero). The last block wins. A
 # file with NO block at all (unconstrained run) returns `nothing` — the field was not
 # computed, which is a different object from a computed all-zero field (SLCE's
 # `torque_qualified` provenance derivation depends on the distinction; fabricating
@@ -288,11 +290,11 @@ function _oszicar_field(path::AbstractString, nat::Int)::Union{Matrix{Float64},N
         end
         if in_block
             p = split(line)
-            idx = length(p) == 4 ? tryparse(Int, p[1]) : nothing
-            if idx !== nothing && 1 <= idx <= nat
-                tmp[1, idx] = parse(Float64, p[2])
-                tmp[2, idx] = parse(Float64, p[3])
-                tmp[3, idx] = parse(Float64, p[4])
+            index = length(p) == 4 ? tryparse(Int, p[1]) : nothing
+            if index !== nothing && 1 <= index <= nat
+                tmp[1, index] = parse(Float64, p[2])
+                tmp[2, index] = parse(Float64, p[3])
+                tmp[3, index] = parse(Float64, p[4])
                 got = true
                 anygot = true
                 continue
@@ -423,15 +425,36 @@ function _process_template(base)
     saxis = nothing
     for line in _join_continuations(_incar_text(base))
         bare = _strip_comment(line)
-        key = _tag_key(bare)
-        if key == "MAGMOM"
-            magmom = _parse_floats(strip(split(bare, '='; limit = 2)[2]))
-        elseif key == "M_CONSTR"
-            # dropped; re-emitted from the sampled directions
+        # VASP allows several tags on one line, separated by `;`. `_tag_key` is anchored
+        # at the start of the string, so a MAGMOM riding on such a line used to be
+        # neither recognized nor dropped: it survived into the output, and VASP resolves
+        # a tag at its FIRST occurrence, so the template's moments silently won over the
+        # sampled ones — while the appended M_CONSTR (a unique tag) constrained toward a
+        # different state. Split first, then classify each segment.
+        segments = split(bare, ';')
+        kept_segments = SubString{String}[]
+        for segment in segments
+            key = _tag_key(segment)
+            if key == "MAGMOM"
+                magmom = _parse_floats(strip(split(segment, '='; limit = 2)[2]))
+            elseif key == "M_CONSTR"
+                # dropped; re-emitted from the sampled directions
+            else
+                key == "I_CONSTRAINED_M" && (has_icm = true)
+                key == "SAXIS" &&
+                    (saxis = Tuple(_parse_floats(strip(split(segment, '='; limit = 2)[2]))))
+                push!(kept_segments, segment)
+            end
+        end
+        if length(kept_segments) == length(segments)
+            push!(kept, line)              # nothing removed — preserve the line verbatim
         else
-            key == "I_CONSTRAINED_M" && (has_icm = true)
-            key == "SAXIS" && (saxis = Tuple(_parse_floats(strip(split(bare, '='; limit = 2)[2]))))
-            push!(kept, line)
+            # A mixed line: re-emit each surviving tag on its own line. The original
+            # line's trailing comment is dropped with it, because it may well have been
+            # describing the moment assignment we just removed.
+            for segment in kept_segments
+                isempty(strip(segment)) || push!(kept, String(strip(segment)))
+            end
         end
     end
     return kept, magmom, has_icm, saxis
@@ -536,7 +559,19 @@ function write_incar(path::AbstractString, directions::AbstractMatrix{<:Real};
         # Keep the template verbatim, dropping its SAXIS only when we are overriding it (so the
         # declared frame always matches the frame the moments were written in).
         for l in kept
-            override_saxis && _tag_key(_strip_comment(l)) == "SAXIS" && continue
+            # Segment-aware for the same reason `_process_template` is: a `;`-joined line
+            # whose SAXIS is not the first tag would otherwise survive the override, and
+            # VASP resolves a tag at its first occurrence. Only a line that actually
+            # carries SAXIS is rewritten — every other line stays verbatim, comments
+            # included.
+            segments = override_saxis ? split(_strip_comment(l), ';') : SubString{String}[]
+            if any(seg -> _tag_key(seg) == "SAXIS", segments)
+                for segment in segments
+                    _tag_key(segment) == "SAXIS" && continue
+                    isempty(strip(segment)) || push!(lines, String(strip(segment)))
+                end
+                continue
+            end
             push!(lines, l)
         end
     end
@@ -622,9 +657,9 @@ function write_inputs(rootdir::AbstractString, crystal::Crystal,
     mkpath(rootdir)
     width = max(3, ndigits(length(configs)))
     dirs = String[]
-    for (i, cfg) in enumerate(configs)
+    for (i, config) in enumerate(configs)
         sub = joinpath(rootdir, string(prefix, "-", lpad(i, width, '0')))
-        write_inputs(sub, crystal, cfg; kwargs...)
+        write_inputs(sub, crystal, config; kwargs...)
         push!(dirs, sub)
     end
     return dirs

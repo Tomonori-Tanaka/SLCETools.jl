@@ -6,6 +6,43 @@ release, so everything lives under *Unreleased*.
 
 ## [Unreleased]
 
+### Fixed — `multipole_average` overflowed to `NaN` on a strong single-site field
+
+`exp(-V)` was accumulated without a shift, so once `max(-V)` passed 709 the
+normalization and every accumulator became `Inf` and the ratio `NaN`. `V` spans
+`field_scale(c) ≈ 2κ` for a vMF field, so this began at κ ≈ 800 — reached by the
+multipole path at τ ≲ 0.004 and by an anisotropy-dominated model at *any* τ, including
+the anisotropy-weighted paramagnet the sampler exists for. The `NaN` then propagated
+into the magnetizations and surfaced as `InexactError: Int64(NaN)` from the quadrature
+sizing, an error naming nothing in this package. The kernel now carries a running
+minimum of `V` (an online log-sum-exp); the shift cancels exactly in the ratio, and the
+rescale factor is always `< 1`, so it cannot overflow either. `site_probabilities` and
+the Python viewer already shifted — this was the kernel feeding the physics.
+Gate: `⟨cosθ⟩ = L(κ)` against the closed-form Langevin function at κ up to 5000
+(`test_site_engine.jl`).
+
+### Fixed — a `;`-joined template INCAR silently kept its own MAGMOM
+
+VASP allows several tags on one line separated by `;`, and resolves a tag at its first
+occurrence. `_tag_key` is anchored at the start of the string, so a `MAGMOM` riding on
+such a line was neither recognized nor dropped: it survived into the output ahead of the
+appended one, so the run used the *template's* moments while the appended `M_CONSTR` (a
+unique tag) constrained toward the sampled ones — an internally inconsistent input, and
+a whole active-learning batch labelled at the wrong magnetic state. `_process_template`
+now splits on `;` before classifying, and the SAXIS override does the same. A `;`-joined
+line that loses nothing is still passed through verbatim, comment included.
+
+### Fixed — smaller validation and numerical-hygiene defects
+
+- `read_poscar` returned a silent **zero-atom** `Crystal` for a POSCAR whose species
+  line is blank: `all` is vacuously true on an empty token vector, so the VASP4 branch
+  accepted it. Both count guards now require a non-empty list.
+- `_perron`'s sign-definiteness tolerance never scaled: `maximum(abs, v; init = 1.0)` is
+  a *floor* on a LAPACK-normalized eigenvector, so `tol` was pinned at an absolute
+  `1e-8`. On a spread-out mode of a large cell the genuine components approach it.
+- The three self-consistency non-convergence warnings tested `Δ > 1e-6`, which is
+  `false` for `NaN` — a non-finite residual was reported as converged.
+
 ### Added — the documentation is published
 
 - **<https://tomonori-tanaka.github.io/SLCETools.jl/dev/>** — the Documenter site is

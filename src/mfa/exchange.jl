@@ -83,7 +83,12 @@ function _perron(A::Matrix{Float64})
     F = eigen(Symmetric(A))
     ρ = F.values[end]
     v = F.vectors[:, end]
-    tol = 1.0e-8 * maximum(abs.(v); init = 1.0)
+    # Relative to the eigenvector's own largest component. `init = 1.0` here would be a
+    # FLOOR, not an empty-collection default: `v` is LAPACK-normalized, so `max|v| ≤ 1`
+    # and the reduction would always return 1.0, pinning `tol` at an absolute 1e-8. On a
+    # spread-out mode of a large cell (`max|v| ~ 1/√n`) the genuine components approach
+    # that absolute cutoff.
+    tol = 1.0e-8 * maximum(abs.(v); init = 0.0)
     pos = count(>(tol), v)
     neg = count(<(-tol), v)
     return ρ, (pos == 0 || neg == 0)

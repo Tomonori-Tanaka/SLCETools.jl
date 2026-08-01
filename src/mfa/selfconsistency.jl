@@ -153,7 +153,7 @@ function _coupled_state(Abar::Matrix{Float64}, τ::Float64, n::Int)
         out
     end
     m, Δ = _anderson_solve(G!, ones(n), 0.0, 1.0)
-    Δ > 1.0e-6 && @warn "the coupled mean-field self-consistency did not converge at " *
+    !(Δ <= 1.0e-6) && @warn "the coupled mean-field self-consistency did not converge at " *
         "τ = $τ (residual $Δ); m_a may be inaccurate (critical slowing near T_MF, or a " *
         "frustrated reference)."
     κ = Vector{Float64}(undef, n)
@@ -210,7 +210,7 @@ function _tensor_state(exch::ExchangeModel, ehat::Vector{SVector{3,Float64}}, ρ
         out
     end
     m, Δ = _anderson_solve(G!, ones(n), -1.0, 1.0)
-    Δ > 1.0e-6 && @warn "the tensorial mean-field self-consistency did not converge at " *
+    !(Δ <= 1.0e-6) && @warn "the tensorial mean-field self-consistency did not converge at " *
         "τ = $τ (residual $Δ); m_a may be inaccurate (critical slowing near T_MF, or a " *
         "frustrated reference)."
     cs = Vector{Vector{Float64}}(undef, n)
@@ -230,7 +230,7 @@ function _ref_multipoles(ehat::Vector{SVector{3,Float64}}, lmax::Int)::Vector{Ve
 end
 
 # Build every atom's single-site coefficient vector c_a from the current multipole averages
-# `Zavg` (per atom): c_a[lm(ls[i],μ_i)] += coef·folded[idx]·∏_{k≠i} ⟨Z_{ls[k],μ_k}⟩_{atoms[k]},
+# `Zavg` (per atom): c_a[lm(ls[i],μ_i)] += coef·folded[index]·∏_{k≠i} ⟨Z_{ls[k],μ_k}⟩_{atoms[k]},
 # summed over all terms and positions i with atoms[i] = a, then scaled by β. Mirrors
 # `accumulate_grad!` with the site-a harmonic left symbolic. `cs[a]` is zeroed first.
 function _site_coeffs_all!(cs::Vector{Vector{Float64}}, terms::Vector{_MFATerm},
@@ -239,7 +239,7 @@ function _site_coeffs_all!(cs::Vector{Vector{Float64}}, terms::Vector{_MFATerm},
         fill!(cs[a], 0.0)
     end
     # Dispatch through a rank-specialized barrier: `_MFATerm.folded` is `Array{Float64}` (rank
-    # erased), so `CartesianIndices(folded)` / `idx[k]` would dynamically dispatch on every
+    # erased), so `CartesianIndices(folded)` / `index[k]` would dynamically dispatch on every
     # access in this hottest many-body loop; the barrier recovers the concrete rank D.
     for term in terms
         _accumulate_term!(cs, term.coef, term.atoms, term.ls, term.folded, Zavg)
@@ -255,18 +255,18 @@ end
 @inline function _accumulate_term!(cs::Vector{Vector{Float64}}, coef::Float64,
                                    atoms::Vector{Int}, ls::Vector{Int}, folded::Array{Float64,D},
                                    Zavg::Vector{Vector{Float64}}) where {D}
-    @inbounds for idx in CartesianIndices(folded)
-        w = coef * folded[idx]
+    @inbounds for index in CartesianIndices(folded)
+        w = coef * folded[index]
         w == 0.0 && continue
         for i = 1:D
             p = 1.0
             for k = 1:D
                 k == i && continue
-                μk = idx[k] - ls[k] - 1
+                μk = index[k] - ls[k] - 1
                 p *= Zavg[atoms[k]][Harmonics.lm_index(ls[k], μk)]
             end
             p == 0.0 && continue
-            μi = idx[i] - ls[i] - 1
+            μi = index[i] - ls[i] - 1
             cs[atoms[i]][Harmonics.lm_index(ls[i], μi)] += w * p
         end
     end
@@ -320,7 +320,7 @@ function _multipole_state(mf::MultipoleModel, ehat::Vector{SVector{3,Float64}}, 
     # converged average once l ≥ 14 (√((2·14+1)/4π) ≈ 1.52).
     zcap = sqrt((2 * lmax + 1) / (4π))
     flat, Δ = _anderson_solve(G!, flat0, -zcap, zcap)
-    Δ > 1.0e-6 && @warn "the full-multipole mean-field self-consistency did not converge " *
+    !(Δ <= 1.0e-6) && @warn "the full-multipole mean-field self-consistency did not converge " *
         "at τ = $τ (residual $Δ); the multipole averages may be inaccurate (critical " *
         "slowing near T_MF, or a frustrated reference)."
     @inbounds for a = 1:n, j = 1:nlm

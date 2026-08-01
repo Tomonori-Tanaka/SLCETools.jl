@@ -2,7 +2,7 @@
 #
 # Draws a unit spin direction from the single-site Boltzmann distribution
 #
-#     P(e) ∝ exp(−V(e)),    V(e) = Σ_{l≥1, m} c[idx(l,m)]·Z_lm(e),
+#     P(e) ∝ exp(−V(e)),    V(e) = Σ_{l≥1, m} c[index(l,m)]·Z_lm(e),
 #
 # where `c` is the already-β-scaled generalized-field coefficient vector indexed by
 # `Harmonics.lm_index(l, m)` (length `(lmax+1)²`; the `l = 0` entry, a constant shift,
@@ -351,6 +351,18 @@ function multipole_average(q::SphereQuadrature, c::AbstractVector{<:Real},
     acc = zeros(Float64, nlm)
     zrow = Vector{Float64}(undef, nlm)   # Z_lm(e) tabulated once per node
     norm_z = 0.0
+    # `exp(-V)` is accumulated against a running MINIMUM of `V` (an online
+    # log-sum-exp), not bare: the result is a ratio `acc/norm_z`, so a common factor
+    # `exp(vshift)` cancels exactly, while the bare form overflows to `Inf` once
+    # `max(-V) > 709`. That is not a corner case — `V` spans `field_scale(c)`, which
+    # is `≈ 2κ` for a vMF field, so a κ ≳ 800 single-site field (τ ≲ 0.004 on the
+    # multipole path, or an ordinary τ with an anisotropy-dominated model) produced
+    # `Inf/Inf = NaN`, which then propagated into the magnetizations and surfaced as
+    # `InexactError: Int64(NaN)` from `_quadrature_size` — an error naming nothing in
+    # this package. `site_probabilities` and the Python viewer already shift; this is
+    # the kernel that feeds the physics, so it must too. Rescaling when a new minimum
+    # appears multiplies by `exp(v - vshift) < 1`, so it can never overflow either.
+    vshift = Inf
     @inbounds for t in eachindex(q.dirs)
         e = q.dirs[t]
         # Tabulate the harmonic row once: it was previously evaluated twice per node — once
@@ -371,7 +383,17 @@ function multipole_average(q::SphereQuadrature, c::AbstractVector{<:Real},
                 v += ci * zrow[Harmonics.lm_index(l, m)]
             end
         end
-        p = q.weights[t] * exp(-v)
+        if v < vshift
+            if isfinite(vshift)
+                rescale = exp(v - vshift)          # < 1
+                norm_z *= rescale
+                for k = 1:nlm
+                    acc[k] *= rescale
+                end
+            end
+            vshift = v
+        end
+        p = q.weights[t] * exp(-(v - vshift))
         norm_z += p
         for k = 1:nlm
             acc[k] += p * zrow[k]

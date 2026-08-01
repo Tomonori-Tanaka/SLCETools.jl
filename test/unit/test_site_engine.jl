@@ -83,6 +83,24 @@ end
         @test_throws ArgumentError MR.multipole_average(cache, [1.0, 2.0, 3.0], 1)
     end
 
+    @testset "a strong field does not overflow: ⟨cosθ⟩ = L(κ) at κ ≫ 709" begin
+        # `exp(-V)` accumulated without a shift overflows to `Inf` once `max(-V) > 709`,
+        # and `Inf/Inf = NaN` then propagated into the magnetizations, surfacing much
+        # later as `InexactError: Int64(NaN)` from the quadrature sizing. `V` spans
+        # `field_scale(c) ≈ 2κ` for a vMF field, so this begins at κ ≈ 800 — reached by
+        # the multipole path at τ ≲ 0.004 and by an anisotropy-dominated model at any τ.
+        # The oracle is the closed-form classical Langevin function, which knows nothing
+        # about this implementation; measured deviation is ≤ 3.2e-13, so the bound below
+        # carries ~3 decades of headroom and still resolves any reintroduced overflow.
+        lm10 = MR.Harmonics.lm_index(1, 0)
+        for κ in (700.0, 800.0, 1500.0, 5000.0)
+            c, N10 = _l1_field_along_z(κ, 1)
+            ez = MR.multipole_average(c, 1)[lm10] / N10
+            @test isfinite(ez)
+            @test ez ≈ _langevin(κ) rtol = 1e-9
+        end
+    end
+
     @testset "general engine on a non-vMF (l=2 Bingham) field: Metropolis ↔ quadrature" begin
         # An easy-axis quadrupolar field: V = a·Z_20, P ∝ exp(-a Z_20). With a < 0 the
         # distribution concentrates toward the ±z axis (a girdle for a > 0) — a genuinely
