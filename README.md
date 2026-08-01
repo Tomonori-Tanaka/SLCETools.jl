@@ -5,6 +5,8 @@
 
 **Documentation:** <https://tomonori-tanaka.github.io/SLCETools.jl/dev/>
 
+**Reading the source:** [`ARCHITECTURE.md`](ARCHITECTURE.md) — dependency graph, include layering, and an ordered reading path through `src/`.
+
 Auxiliary tooling around the spin–lattice cluster-expansion (SLCE) fitting core
 [`SLCE.jl`](https://github.com/Tomonori-Tanaka/SLCE.jl): utilities that **consume** a fitted
 `SLCEModel` rather than build one.
