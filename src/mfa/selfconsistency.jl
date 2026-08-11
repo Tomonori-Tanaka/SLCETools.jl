@@ -21,10 +21,16 @@ const _MFA_M_MAX = 1.0 - 1.0e-9
 # The Langevin function L(κ) = coth κ − 1/κ = ⟨cosθ⟩ for a vMF field of concentration κ.
 # `coth κ − 1/κ` cancels catastrophically as κ → 0, so a Maclaurin series is used there
 # (the cone half-width regime near T_MF, where the coupled solve spends its iterations).
+# The crossover balances the series truncation (~κ⁷/4725, the first dropped term) against
+# the cancellation error of the closed form (~2ε/κ): at 0.03 both are ≲ 5e-15 absolute
+# (measured against a 256-bit BigFloat oracle; the branch jump is ~1.4e-15). The old
+# crossover 0.1 left ~1e-11…6e-10 series error just below it — four orders above the
+# closed form's — which kept `_anderson_solve`'s tol = 1e-13 unreachable near T_MF
+# (audit 2026-08-01 #19).
 function _langevin(κ::Real)::Float64
     κf = Float64(κ)
     a = abs(κf)
-    if a < 0.1
+    if a < 0.03
         return κf * (1 / 3 - κf^2 / 45 + 2 * κf^4 / 945)
     end
     return coth(κf) - 1 / κf

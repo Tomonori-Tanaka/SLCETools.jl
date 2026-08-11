@@ -6,6 +6,20 @@ release, so everything lives under *Unreleased*.
 
 ## [Unreleased]
 
+### Fixed — `_langevin`'s series/closed-form crossover lowered 0.1 → 0.03
+
+**Changes fitted numbers at the ~1e-9 relative level near `T_MF`.** At the old
+crossover the Maclaurin branch's truncation error (~κ⁷/4725, up to ~6e-10 just
+below 0.1) exceeded the closed form's cancellation error by four orders, and the
+~2e-11 branch jump kept `_anderson_solve`'s `tol = 1e-13` unreachable near
+`T_MF` — the solver silently burned all 2000 iterations (audit 2026-08-01 #19).
+At 0.03 both branches are ≲ 5.4e-15 absolute and the jump is ~1.4e-15 (measured
+against a 256-bit BigFloat oracle). New gate: `_langevin` vs the BigFloat
+closed form on a grid spanning both branches and the old crossover region, bound
+`1e-13` absolute (~20× headroom over the measured worst case; a reverted
+crossover leaves ~2e-13…2e-11 error on the in-gap grid points, so the mutation
+is resolved), plus odd symmetry and branch continuity.
+
 ### Fixed — MFA docstrings no longer contradict the code
 
 Three corrections (audit 2026-08-01 #21), no behavior change: `MFASampler` and

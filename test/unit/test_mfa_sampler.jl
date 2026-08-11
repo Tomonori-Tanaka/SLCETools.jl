@@ -42,6 +42,25 @@ _zref(n) = repeat(Float64[0, 0, 1], 1, n)
         @test MR.tau_from_magnetization(1.0) == 0.0
     end
 
+    @testset "Langevin branches vs a 256-bit oracle (audit #19)" begin
+        # Oracle: L(κ) = coth κ − 1/κ evaluated in 256-bit BigFloat — exact to far below
+        # Float64 resolution, an arithmetic path the implementation cannot reach. The
+        # 1e-13 absolute bound carries ~20× headroom over the measured worst case
+        # (5.4e-15 across both branches, dense grid) and must resolve the mutation it
+        # guards against: a crossover reverted to 0.1 leaves ~2e-13…2e-11 series error
+        # on the grid points in (0.03, 0.1) below.
+        setprecision(BigFloat, 256) do
+            for κ in (1e-8, 1e-4, 0.01, 0.0299, 0.0301, 0.05, 0.09, 0.099, 0.5, 1.0, 10.0)
+                Lref = Float64(coth(big(κ)) - 1 / big(κ))
+                @test abs(MR._langevin(κ) - Lref) <= 1e-13
+                @test abs(MR._langevin(-κ) + Lref) <= 1e-13   # L is odd
+            end
+        end
+        # the branch jump at the crossover is at floating-point noise level
+        @test abs(MR._langevin(prevfloat(0.03)) - MR._langevin(nextfloat(0.03))) <= 1e-14
+        @test MR._langevin(0.0) == 0.0
+    end
+
     @testset "constructor validates and projects the reference (family door)" begin
         # a scaled column is REFUSED, never silently normalized (until 2026-08
         # this pinned the opposite: [2,0,0]/[0,-3,0] came back normalized)
