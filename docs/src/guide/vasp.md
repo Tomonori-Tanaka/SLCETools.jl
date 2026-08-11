@@ -47,6 +47,15 @@ Moments and fields are rotated from the `SAXIS` quantization frame into Cartesia
 `Rz(α)·Ry(β)`; pass `energy_kind = :sigma0` for `E0` instead of the `F=` free energy, or
 `mint = true` to read the `M_int` columns.
 
+A constrained run's `F`/`E0` include one copy of the constraint penalty
+``E_p = \sum_a \lambda \lVert \boldsymbol M_{\perp,a}\rVert^2`` — an artifact of the
+constraining machinery, not part of the Hamiltonian being fitted. The reader subtracts
+it (`datum.energy = F − E_p`) whenever the file prints an `E_p = …` line, and warns when
+`|E_p|` exceeds `ep_warn` (default `1e-3` eV): a penalty that large means the converged
+moments deviate materially from the directions the datum claims, so consider a larger
+`LAMBDA` or dropping that configuration. Unconstrained files (no `E_p` line) are left
+untouched.
+
 ```@docs
 SLCETools.VASP.read_poscar
 SLCETools.VASP.Oszicar

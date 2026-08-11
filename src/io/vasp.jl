@@ -192,10 +192,30 @@ per-atom observation (the per-config `torque_qualified` gate refuses exactly the
 claim this per-atom case is allowed to make — a whole run whose convergence the
 file cannot certify).
 
+A constrained run's total energy includes exactly one copy of the constraint
+penalty `E_p = Σₐ λ‖M_⊥,a‖²` (verified against the OUTCAR component sum), and
+`F` and `E0` differ only by the smearing-entropy term, so both carry it. `E_p` is
+an artifact of the constraining machinery, not part of the spin Hamiltonian being
+fitted, so when the file prints an `E_p = …` line (constrained runs do, once per
+SCF step; the last one — the converged value — wins, like every other block in
+this parser) the reader subtracts it: `datum.energy = F − E_p` (or `E0 − E_p`).
+Near self-consistency `E_p` is ~1e-35 and the subtraction is a floating-point
+no-op; far from it — exactly where sampled configurations live — it reaches meV
+scale and is configuration-dependent, so leaving it in would bias every fitted
+coupling. A large `E_p` also means the converged moments deviate materially from
+the constrained directions (the datum's direction labels), so values above
+`ep_warn` additionally get a warning. A file with no `E_p` line (an unconstrained
+run) is left untouched.
+
 # Keyword arguments
 - `saxis`: the `SAXIS` quantization axis; moments and fields are rotated from this frame into
   Cartesian coordinates by `Rz(α)·Ry(β)` (default `[0,0,1]` = identity).
 - `energy_kind`: `:free` (the `F=` free energy) or `:sigma0` (`E0`, energy σ→0).
+  Both include one copy of `E_p`; the subtraction above applies to either.
+- `ep_warn`: warn when the subtracted penalty satisfies `|E_p| > ep_warn` (same energy
+  units as the file — eV for VASP; default `1e-3`). The energy is corrected either way;
+  the warning flags that the *directions* the datum claims were only loosely enforced.
+  Use `Inf` to silence.
 - `mint`: read the moment from the `M_int` columns instead of `MW_int`. The constraining field
   `lambda*MW_perp` is referenced to the `MW_int` moment, so the default `mint = false` keeps the
   moment and field (hence the torque) mutually consistent.
@@ -208,26 +228,31 @@ struct Oszicar <: AbstractDFTSource
     energy_kind::Symbol
     mint::Bool
     setup_id::Union{String,Nothing}
+    ep_warn::Float64
 end
 
 function Oszicar(paths::AbstractVector{<:AbstractString};
                 saxis = SVector{3,Float64}(0, 0, 1),
                 energy_kind::Symbol = :free, mint::Bool = false,
-                setup_id::Union{AbstractString,Nothing} = nothing)
+                setup_id::Union{AbstractString,Nothing} = nothing,
+                ep_warn::Real = 1e-3)
     energy_kind in (:free, :sigma0) ||
         throw(ArgumentError("energy_kind must be :free or :sigma0; got $(repr(energy_kind))"))
+    ep_warn >= 0 || throw(ArgumentError("ep_warn must be ≥ 0 (Inf silences); got $ep_warn"))
     return Oszicar(collect(String, paths), SVector{3,Float64}(saxis), energy_kind, mint,
-                   setup_id === nothing ? nothing : String(setup_id))
+                   setup_id === nothing ? nothing : String(setup_id), Float64(ep_warn))
 end
 Oszicar(path::AbstractString; kwargs...) = Oszicar([path]; kwargs...)
 
-# Final-step energy and per-atom moment vectors (3 × n_atoms) from one OSZICAR. The moment block
-# is the `ion … MW_int … M_int` table (7 columns: index + MW_int xyz + M_int xyz); it ends at a `:`
-# line or any non-7-column line (e.g. the `… F= … E0= …` summary). The last committed block /
-# last `F=` line (final ionic step) wins.
+# Final-step energy, constraint penalty (`E_p = …` line; `nothing` when the run is
+# unconstrained and never prints one), and per-atom moment vectors (3 × n_atoms) from one
+# OSZICAR. The moment block is the `ion … MW_int … M_int` table (7 columns: index + MW_int
+# xyz + M_int xyz); it ends at a `:` line or any non-7-column line (e.g. the `… F= … E0= …`
+# summary). The last committed block / last `F=` line / last `E_p` (final step) wins.
 function _oszicar_energy_moments(path::AbstractString, energy_kind::Symbol, mint::Bool)
     energy = 0.0
     found_e = false
+    ep = nothing
     moments = SVector{3,Float64}[]
     tmp = SVector{3,Float64}[]
     collecting = false
@@ -259,12 +284,20 @@ function _oszicar_energy_moments(path::AbstractString, energy_kind::Symbol, mint
                 v === nothing || (energy = v; found_e = true)
             end
         end
+        m = match(r"E_p\s*=\s*(\S+)", line)
+        if m !== nothing
+            c = m.captures[1]
+            if c !== nothing
+                v = tryparse(Float64, c)
+                v === nothing || (ep = v)
+            end
+        end
     end
     collecting && (moments = copy(tmp))                 # block running at EOF
     found_e || throw(ArgumentError("no energy (F= line) found in $path"))
     isempty(moments) &&
         throw(ArgumentError("no magnetic-moment (M_int) block found in $path"))
-    return energy, reduce(hcat, moments)                # 3 × n_atoms
+    return energy, ep, reduce(hcat, moments)            # ep: Union{Float64,Nothing}
 end
 
 # Per-atom constraining field (3 × n_atoms) from the `lambda*MW_perp` block; rows are
@@ -320,7 +353,18 @@ function read_configs(src::Oszicar)::Vector{TrainingDatum}
     data = Vector{TrainingDatum}(undef, length(src.paths))
     for (i, path) in enumerate(src.paths)
         isfile(path) || throw(ArgumentError("OSZICAR not found: $path"))
-        energy, moments = _oszicar_energy_moments(path, src.energy_kind, src.mint)
+        energy, ep, moments = _oszicar_energy_moments(path, src.energy_kind, src.mint)
+        if ep !== nothing
+            # TOTEN carries exactly one copy of the constraint penalty (see the Oszicar
+            # docstring); the fitted Hamiltonian must not.
+            energy -= ep
+            abs(ep) > src.ep_warn &&
+                @warn "OSZICAR constraint penalty E_p = $ep exceeds ep_warn = " *
+                      "$(src.ep_warn) — the energy is corrected (E_p subtracted), but a " *
+                      "penalty this large means the converged moments deviate materially " *
+                      "from the constrained directions this datum claims; consider a " *
+                      "larger LAMBDA or dropping the configuration" path
+        end
         field = _oszicar_field(path, size(moments, 2))
         if field === nothing
             prov = DatumProvenance(; setup_id = src.setup_id)

@@ -6,6 +6,24 @@ release, so everything lives under *Unreleased*.
 
 ## [Unreleased]
 
+### Fixed — OSZICAR energies no longer carry the constraint penalty `E_p`
+
+**Changes fitted numbers** for constrained runs away from self-consistency. A
+constrained-moment run's `F`/`E0` include exactly one copy of the penalty
+`E_p = Σₐ λ‖M_⊥,a‖²` (verified against the OUTCAR component sum) — an artifact of
+the constraining machinery, not part of the spin Hamiltonian being fitted. The
+`Oszicar` reader used to ignore the `E_p = …` line entirely, so every datum's
+energy was biased by a configuration-dependent amount: negligible (~1e-35) near
+self-consistency, meV-scale exactly where sampled configurations live (audit
+2026-08-01 #20). `read_configs` now parses the line (last one — the converged
+step — wins, like every other block) and subtracts it; a new `ep_warn` kwarg
+(default `1e-3` eV, `Inf` silences) warns when `|E_p|` is large enough that the
+converged moments deviate materially from the directions the datum claims.
+Unconstrained files (no `E_p` line) are untouched, so the Magesty-parity oracle
+suite is unaffected. Gates: hand-arithmetic energy checks on hand-written
+constrained fixtures (`F − E_p`, `E0 − E_p`, last-step-wins), the warning
+threshold in both directions, and the unconstrained no-op.
+
 ### Changed — `write_inputs` refuses a template MAGMOM as a magnitude source
 
 **Breaking** for callers who relied on `write_inputs(...; base = <INCAR>)` with no

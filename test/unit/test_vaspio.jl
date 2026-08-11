@@ -11,8 +11,10 @@ _write(dir, name, s) = (p = joinpath(dir, name); write(p, s); p)
 function _oszicar_text(; energy_free = "-.84314080E+02", energy_zero = "-.84200000E+02",
                        mw = [(1.0, 0.0, 0.0), (0.0, 0.0, 2.0)],
                        mint = [(1.1, 0.0, 0.0), (0.0, 0.0, 2.1)],
-                       field = [(0.0, 0.02, 0.0), (0.03, 0.0, 0.0)])
+                       field = [(0.0, 0.02, 0.0), (0.03, 0.0, 0.0)],
+                       ep = nothing)
     io = IOBuffer()
+    ep === nothing || println(io, " E_p =  $ep  lambda =  0.200E+01")
     println(io, " ion                    MW_int                       M_int")
     for i = 1:length(mw)
         println(io, "   $i  $(mw[i][1]) $(mw[i][2]) $(mw[i][3])  $(mint[i][1]) $(mint[i][2]) $(mint[i][3])")
@@ -110,6 +112,45 @@ end
         @test read_configs(Oszicar(p; energy_kind = :sigma0))[1].energy ≈ -84.200000
         dmint = read_configs(Oszicar(p; mint = true))[1]
         @test dmint.magmoms ≈ [1.1, 2.1]                  # M_int columns
+    end
+
+    @testset "OSZICAR — constraint penalty E_p is subtracted (audit #20)" begin
+        # Oracle: hand arithmetic on hand-written file contents — the parser never sees
+        # the expected values below in any form it could echo back.
+        # F = -84.314080, E0 = -84.200000, E_p = 5e-4 (below the 1e-3 default: no warn).
+        p = _write(dir, "OSZICAR_ep", _oszicar_text(; ep = "0.50000E-03"))
+        d = @test_logs read_configs(Oszicar(p))[1]
+        @test d.energy ≈ -84.314080 - 0.0005              # F − E_p, by hand
+        @test read_configs(Oszicar(p; energy_kind = :sigma0))[1].energy ≈
+              -84.200000 - 0.0005                         # E0 carries the same one copy
+
+        # Above the threshold: energy still corrected, and the deviation warning fires.
+        pw = _write(dir, "OSZICAR_ep_warn", _oszicar_text(; ep = "0.25000E-01"))
+        dw = @test_logs (:warn, r"E_p") match_mode = :any read_configs(Oszicar(pw))[1]
+        @test dw.energy ≈ -84.314080 - 0.025
+        # ep_warn = Inf silences without changing the correction …
+        di = @test_logs read_configs(Oszicar(pw; ep_warn = Inf))[1]
+        @test di.energy ≈ -84.314080 - 0.025
+        # … and a tighter threshold flags the small penalty too.
+        @test_logs (:warn, r"E_p") match_mode = :any read_configs(Oszicar(p; ep_warn = 1e-4))
+        @test_throws ArgumentError Oszicar(p; ep_warn = -1.0)
+
+        # Multi-step file: the LAST E_p (converged step) wins, like the F=/block rules.
+        # the summary lines carry 8 tokens (`d E = 0`) so they terminate the 7-column
+        # moment block, as in real OSZICAR output
+        ms = " E_p =  0.90000E+00  lambda =  0.200E+01\n" *
+             " ion MW_int M_int\n   1  1.0 0.0 0.0  1.0 0.0 0.0\n" *
+             "   1 F= -.90E+01 E0= -.90E+01 d E = 0\n" *
+             " E_p =  0.12000E-01  lambda =  0.200E+01\n" *
+             " ion MW_int M_int\n   1  1.0 0.0 0.0  1.0 0.0 0.0\n" *
+             "   1 F= -.10E+02 E0= -.10E+02 d E = 0\n"
+        dm = @test_logs (:warn, r"E_p") match_mode = :any read_configs(
+            Oszicar(_write(dir, "OSZICAR_ep_ms", ms)))[1]
+        @test dm.energy ≈ -10.0 - 0.012                   # last F − last E_p, by hand
+
+        # No E_p line (unconstrained run): the energy is left untouched.
+        pu = _write(dir, "OSZICAR_ep_none", _oszicar_text())
+        @test read_configs(Oszicar(pu))[1].energy ≈ -84.314080
     end
 
     @testset "OSZICAR — SAXIS rotates moments/fields into the Cartesian frame" begin

@@ -135,7 +135,11 @@ Inherited from the core (`SLCE`'s `CLAUDE.md`); the ones this package leans on:
   zero-filled field, which would claim `τ = 0` was observed and admit false torque rows
   into a co-fit; a present block with zero rows means "computed, those atoms
   unconstrained". `Oszicar(...; setup_id = ...)` stamps the computational-setup label
-  (`SLCEDataset` rejects cross-setup mixtures). Gates: `test/unit/test_vaspio.jl` (read),
+  (`SLCEDataset` rejects cross-setup mixtures). (6) **The energy excludes `E_p`**: a
+  constrained run's `F`/`E0` carry exactly one copy of the constraint penalty, and the
+  reader subtracts the file's last `E_p = …` value (warning above `ep_warn`) — the fitted
+  Hamiltonian must never see the penalty. Absent-≠-zero applies here too: no `E_p` line
+  means an unconstrained run, and nothing is subtracted. Gates: `test/unit/test_vaspio.jl` (read),
   `test/unit/test_vasp_incar.jl` (write, round-trip / order / formatting), `test/oracle/`
   (parsers vs Magesty bit-for-bit). The sampler gives only directions + an order parameter
   `m_a ∈ [0,1]`, **not** μ_B magnitudes — the write magnitudes are an external input.
