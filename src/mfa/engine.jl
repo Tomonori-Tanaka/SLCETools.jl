@@ -284,11 +284,12 @@ _quadrature_size(lmax::Integer, concentration::Real)::Int =
     sphere_quadrature(lmax; concentration = 0.0, ntheta = 0, nphi = 0) -> SphereQuadrature
 
 Build a product Gauss–Legendre × uniform-azimuth quadrature. The node count defaults to
-`2·lmax + 6 + ceil(concentration)` in each angle: the `2·lmax + 6` resolves the harmonics,
-and `concentration` (the `exp(−V)` exponent range, e.g. `≈ 2κ` for a vMF field of
-concentration `κ`) adds the resolution a sharply peaked field needs. Pass explicit
-`ntheta`/`nphi` to override. Use `multipole_average(c, lmax)` to have the size chosen from
-`c` automatically.
+`2·lmax + 6 + ceil(concentration)` in each angle, **capped at 256**: the `2·lmax + 6`
+resolves the harmonics, and `concentration` (the `exp(−V)` exponent range, e.g. `≈ 2κ`
+for a vMF field of concentration `κ`) adds the resolution a sharply peaked field needs
+(the cap bounds the cost for extreme concentrations — beyond it, sharpen deliberately).
+Pass explicit `ntheta`/`nphi` to override; an explicit size is honored uncapped. Use
+`multipole_average(c, lmax)` to have the size chosen from `c` automatically.
 """
 function sphere_quadrature(lmax::Integer; concentration::Real = 0.0,
                            ntheta::Integer = 0, nphi::Integer = 0)::SphereQuadrature

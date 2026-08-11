@@ -162,9 +162,13 @@ n_atoms(mf::MultipoleModel)::Int = mf.n_atoms
     MFASampler(exch::ExchangeModel; reference)
     MFASampler(model::SLCEModel; reference)
 
-Mean-field spin-configuration sampler. Every spin is drawn from `vMF(ê_a, κ_a)` about its
-reference direction; the per-atom concentration is set by the mean-field self-consistency
-at the reduced temperature `τ` (or magnetization `m`), via [`sample`](@ref).
+Mean-field spin-configuration sampler. Every spin is drawn independently from its
+single-site mean-field distribution about its reference direction — the closed-form
+`vMF(ê_a, κ_a)` when the single-site potential is linear in `e` (the global sampler and
+isotropic exchange), a single-site Metropolis draw on the Bingham / higher-multipole
+potential otherwise (tensorial [`ExchangeModel`](@ref), any [`MultipoleModel`](@ref)).
+The per-atom field strength is set by the mean-field self-consistency at the reduced
+temperature `τ` (or magnetization `m`), via [`sample`](@ref).
 
 - `MFASampler(reference)` — the single global, isotropic sampler (P1): `reference` is a
   `3 × n_atoms` matrix of unit seed directions (each column must be within `1e-6` of
@@ -184,8 +188,11 @@ at the reduced temperature `τ` (or magnetization `m`), via [`sample`](@ref).
 The backing `source` is the coupling model the sampler draws from: `nothing` for the single
 global sampler, an [`ExchangeModel`](@ref) for the bilinear/single-ion path (P2/P3), or a
 [`MultipoleModel`](@ref) for the full-multipole path (P4); the sampler is parametric on its
-type so dispatch is type-stable. `Abar` is the normalized molecular-field matrix `Ā` (spectral
-radius 1), `rho` its Perron eigenvalue, and `Tmf = ρ/3` the linearized mean-field `T_MF`.
+type so dispatch is type-stable. `Abar` is the molecular-field matrix scaled as `Ā = A/ρ`,
+where `rho = ρ` is the **largest algebraic eigenvalue** of the symmetric `A` (the Perron
+eigenvalue when `A` is effectively ferromagnetic in the magnitudes; a frustrated reference
+can have a negative eigenvalue below `−ρ`, so `Ā`'s spectral radius may exceed 1 — only
+its largest eigenvalue is pinned at 1). `Tmf = ρ/3` is the linearized mean-field `T_MF`.
 """
 struct MFASampler{S} <: AbstractSampler
     reference::Matrix{Float64}                 # 3 × n_atoms, unit columns

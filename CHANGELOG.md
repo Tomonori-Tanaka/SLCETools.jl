@@ -6,6 +6,18 @@ release, so everything lives under *Unreleased*.
 
 ## [Unreleased]
 
+### Fixed — MFA docstrings no longer contradict the code
+
+Three corrections (audit 2026-08-01 #21), no behavior change: `MFASampler` and
+`sample` claimed *every* spin is drawn from `vMF(ê_a, κ_a)` — for tensorial
+`ExchangeModel` and any `MultipoleModel` the draw is single-site Metropolis on a
+Bingham / higher-multipole potential (the point of P3/P4); `Abar` was described
+as "spectral radius 1" — `ρ` is the largest *algebraic* eigenvalue, so a
+frustrated reference can leave `Ā`'s spectral radius above 1 (only the largest
+eigenvalue is pinned); `sphere_quadrature`'s docstring now states the 256-node
+default cap that `_quadrature_size` applies (explicit `ntheta`/`nphi` stay
+uncapped).
+
 ### Fixed — OSZICAR energies no longer carry the constraint penalty `E_p`
 
 **Changes fitted numbers** for constrained runs away from self-consistency. A

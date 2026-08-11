@@ -221,8 +221,10 @@ end
 Draw spin configurations from the mean-field sampler. Provide **exactly one** control
 variable: the reduced temperature `tau = T/T_MF` or the magnetization `m` (the latter is
 only meaningful for the single global sampler, where it maps to a `τ`). Each spin is drawn
-from `vMF(ê_a, κ_a)` about its reference direction with the self-consistent per-atom
-concentration.
+independently from its single-site mean-field distribution about its reference direction,
+with the self-consistent per-atom field strength: the closed-form `vMF(ê_a, κ_a)` for the
+global / isotropic-exchange samplers, a single-site Metropolis draw on the Bingham /
+higher-multipole potential for tensorial and multipole sources.
 
 The first form draws `n` configurations at a single control value. The second form sweeps
 a **collection** `tau` (or `m`) and draws `nsamples` configurations per value, ordered
