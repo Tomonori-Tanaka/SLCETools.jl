@@ -72,7 +72,9 @@ The single-site potential `V(e) = Σ_{l≥1, m} c[lm_index(l, m)]·Z_lm(e)`. `c`
 `(lmax+1)²`; the `l = 0` entry is ignored (a constant shift cancels in `exp(−V)`).
 """
 function site_potential(c::AbstractVector{<:Real}, e::AbstractVector{<:Real})::Float64
-    lmax = isqrt(length(c)) - 1
+    # `_field_lmax`, not a bare `isqrt`: a mis-sized `c` (not a perfect square) would
+    # otherwise silently lose its tail entries.
+    lmax = _field_lmax(c)
     v = 0.0
     # `e` is a unit direction on every call site (quadrature / Fibonacci nodes, Metropolis
     # iterates, render grid), so the unchecked harmonic is safe and skips the per-call norm.
@@ -348,6 +350,12 @@ end
 function multipole_average(q::SphereQuadrature, c::AbstractVector{<:Real},
                            lmax::Integer)::Vector{Float64}
     L = Int(lmax)
+    # The accumulation below reads `c[lm_index(l, m)]` for every `l ≤ lmax` under
+    # `@inbounds`, so a field shorter than the requested order is an out-of-bounds
+    # read returning garbage, not an error. (Also validates the perfect square.)
+    _field_lmax(c) >= L || throw(ArgumentError(
+        "field has $(length(c)) coefficients (lmax = $(_field_lmax(c))), which does " *
+        "not cover the requested lmax = $L"))
     nlm = (L + 1)^2
     acc = zeros(Float64, nlm)
     zrow = Vector{Float64}(undef, nlm)   # Z_lm(e) tabulated once per node

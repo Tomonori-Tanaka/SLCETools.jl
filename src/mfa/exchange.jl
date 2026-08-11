@@ -160,7 +160,9 @@ function _site_coeffs(g::SVector{3,Float64}, A::SMatrix{3,3,Float64,9}, β::Floa
     return c
 end
 
-# The bilinear molecular field g_a = Σ_b S_ab m_b ê_b on atom a (rigid-axis neighbor means).
+# The bilinear field contraction g_a = Σ_b S_ab m_b ê_b on atom a (rigid-axis neighbor
+# means). NOT the aligning molecular field — that is h_a = −g_a (the sign
+# `_check_reference_stationary` uses); `_site_coeffs` builds c = β·∇E from g directly.
 function _molecular_field(exch::ExchangeModel, ehat::Vector{SVector{3,Float64}},
                           m::Vector{Float64}, a::Int)::SVector{3,Float64}
     g = zero(SVector{3,Float64})

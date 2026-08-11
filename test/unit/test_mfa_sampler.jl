@@ -194,3 +194,32 @@ _zref(n) = repeat(Float64[0, 0, 1], 1, n)
         @test_throws ArgumentError MR.thermal_averaged_m(-1.0)
     end
 end
+
+@testset "thermal_averaged_m vs a 256-bit bisection oracle (review 2026-08-11)" begin
+    # Oracle: an independent BigFloat bisection of m = L(3m/τ) — an arithmetic path
+    # (256-bit coth) the Float64 implementation cannot reach. Gate 5e-12 absolute:
+    # ≥ 5× headroom over the measured ≤ 9.4e-13 (bracket-only convergence, tol
+    # 1e-12), and the mutation it must resolve — restoring `_bisect`'s absolute
+    # `|f| ≤ tol` early exit — leaves 3.5e-7 absolute at τ = 0.99999 (measured;
+    # `f'(m*) ≈ 2(1/τ − 1) → 0` is what made the residual clause fire early).
+    setprecision(BigFloat, 256) do
+        for tau in (0.5, 0.9, 0.99, 0.999, 0.9999, 0.99999)
+            t = BigFloat(tau)
+            f(m) = m - (coth(3m / t) - t / (3m))
+            a = BigFloat(1) / 10^8
+            b = 1 - BigFloat(1) / 10^12
+            fa = f(a)
+            for _ = 1:400
+                mid = (a + b) / 2
+                if (fa < 0) == (f(mid) < 0)
+                    a = mid
+                    fa = f(a)
+                else
+                    b = mid
+                end
+            end
+            mref = (a + b) / 2
+            @test abs(SLCETools.thermal_averaged_m(tau) - mref) <= 5e-12
+        end
+    end
+end

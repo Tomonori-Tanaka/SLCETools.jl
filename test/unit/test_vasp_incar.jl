@@ -82,6 +82,28 @@ _unit(v) = v / norm(v)
         @test count(l -> occursin("MAGMOM", l), collect(eachline(p))) == 1
     end
 
+    @testset "template: signed collinear MAGMOM gives magnitudes; SAXIS length is validated" begin
+        # `MAGMOM = 3.0 -3.0 3.0` is the standard collinear AFM idiom: the sign is a
+        # ±z direction, the magnitude is |value| — the collinear branch must match the
+        # noncollinear branch's norm (this path used to return the signed values and
+        # die far away in `_moment_matrix`'s non-negativity check).
+        base = "ISPIN = 2\nMAGMOM = 3.0 -3.0 3.0\n"
+        p = tempname()
+        V.write_incar(p, config; base = base, constrain = false)
+        M = reshape(incar_floats(p, "MAGMOM"), 3, 3)
+        for a = 1:3
+            @test norm(M[:, a]) ≈ 3.0 atol = 1e-9
+            @test M[:, a] ≈ 3.0 .* config[:, a] atol = 1e-9   # magnitude — no sign leak
+        end
+        # SAXIS is validated at template parse with a named error: 2 components used
+        # to surface as a BoundsError deep inside `_saxis_rotation`, 4 were silently
+        # truncated to the first three.
+        for bad in ("SAXIS = 0 0\n", "SAXIS = 0 0 1 2\n")
+            @test_throws ArgumentError V.write_incar(tempname(), config;
+                base = "MAGMOM = 3.0 -3.0 3.0\n" * bad, constrain = false)
+        end
+    end
+
     @testset "a `;`-joined template line: its MAGMOM is consumed, its neighbours survive" begin
         # VASP allows several tags on one line separated by `;`, and resolves a tag at its
         # FIRST occurrence. A MAGMOM riding on such a line used to be neither recognized

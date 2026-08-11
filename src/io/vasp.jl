@@ -64,15 +64,15 @@ vector (a column of `Lattice.vectors`).
 function read_poscar(path::AbstractString)::Crystal
     isfile(path) || throw(ArgumentError("POSCAR not found: $path"))
     lines = readlines(path)
-    length(lines) >= 8 || throw(ArgumentError("POSCAR is too short to be valid"))
+    length(lines) >= 8 || throw(ArgumentError("POSCAR is too short to be valid: $path"))
 
     scale = tryparse(Float64, strip(lines[2]))
-    scale === nothing && throw(ArgumentError("invalid POSCAR scaling factor: $(lines[2])"))
+    scale === nothing && throw(ArgumentError("invalid POSCAR scaling factor in $path: $(lines[2])"))
 
     A_raw = MMatrix{3,3,Float64}(undef)
     for i = 1:3
         toks = split(strip(lines[2 + i]))
-        length(toks) >= 3 || throw(ArgumentError("bad lattice vector on line $(2 + i)"))
+        length(toks) >= 3 || throw(ArgumentError("bad lattice vector on line $(2 + i) of $path"))
         for j = 1:3
             A_raw[j, i] = parse(Float64, toks[j])   # column i = i-th lattice vector
         end
@@ -94,32 +94,32 @@ function read_poscar(path::AbstractString)::Crystal
         labels = String.(toks6)                         # VASP5: symbols then counts
         cnt = map(t -> tryparse(Int, t), split(strip(lines[7])))
         !isempty(cnt) && all(!isnothing, cnt) && all(c -> c > 0, cnt) ||
-            throw(ArgumentError("bad atom counts on POSCAR line 7: $(lines[7])"))
+            throw(ArgumentError("bad atom counts on line 7 of $path: $(lines[7])"))
         numbers = Int[c for c in cnt]
         coordline = 8
     end
     length(labels) == length(numbers) ||
-        throw(ArgumentError("POSCAR: $(length(labels)) species symbols vs $(length(numbers)) counts"))
+        throw(ArgumentError("$path: $(length(labels)) species symbols vs $(length(numbers)) counts"))
 
     mode = lowercase(strip(lines[coordline]))
     if startswith(mode, "s")                            # optional Selective dynamics line
         coordline += 1
         coordline <= length(lines) ||
-            throw(ArgumentError("POSCAR ends after 'Selective dynamics' (no coordinate-mode line)"))
+            throw(ArgumentError("$path ends after 'Selective dynamics' (no coordinate-mode line)"))
         mode = lowercase(strip(lines[coordline]))
     end
     cartesian = startswith(mode, "c") || startswith(mode, "k")
     startswith(mode, "d") || cartesian ||
-        throw(ArgumentError("invalid POSCAR coordinate mode: $(lines[coordline])"))
+        throw(ArgumentError("invalid coordinate mode in $path: $(lines[coordline])"))
 
     nat = sum(numbers)
     pos = Matrix{Float64}(undef, 3, nat)
     first = coordline + 1
     for a = 1:nat
         li = first + a - 1
-        li <= length(lines) || throw(ArgumentError("POSCAR ends before all $nat positions"))
+        li <= length(lines) || throw(ArgumentError("$path ends before all $nat positions"))
         toks = split(strip(lines[li]))
-        length(toks) >= 3 || throw(ArgumentError("bad position on POSCAR line $li"))
+        length(toks) >= 3 || throw(ArgumentError("bad position on line $li of $path"))
         for j = 1:3
             pos[j, a] = parse(Float64, toks[j])
         end
@@ -248,11 +248,15 @@ Oszicar(path::AbstractString; kwargs...) = Oszicar([path]; kwargs...)
 # unconstrained and never prints one), and per-atom moment vectors (3 × n_atoms) from one
 # OSZICAR. The moment block is the `ion … MW_int … M_int` table (7 columns: index + MW_int
 # xyz + M_int xyz); it ends at a `:` line or any non-7-column line (e.g. the `… F= … E0= …`
-# summary). The last committed block / last `F=` line / last `E_p` (final step) wins.
+# summary). The last committed block / last `F=` line wins. `E_p` is paired with its own
+# step: the value committed is the last `E_p` printed BEFORE the accepted `F=` line — a
+# dangling `E_p` from a truncated tail (a step whose own `F=` never got written) must
+# not be subtracted from an earlier, complete step's energy.
 function _oszicar_energy_moments(path::AbstractString, energy_kind::Symbol, mint::Bool)
     energy = 0.0
     found_e = false
     ep = nothing
+    ep_pending = nothing
     moments = SVector{3,Float64}[]
     tmp = SVector{3,Float64}[]
     collecting = false
@@ -281,7 +285,14 @@ function _oszicar_energy_moments(path::AbstractString, energy_kind::Symbol, mint
             k = findfirst(==(key), p)
             if k !== nothing && k < length(p)
                 v = tryparse(Float64, p[k + 1])
-                v === nothing || (energy = v; found_e = true)
+                if v !== nothing
+                    energy = v
+                    found_e = true
+                    # commit this step's penalty alongside its energy; a step with no
+                    # E_p lines of its own commits `nothing` (constraint not acting)
+                    ep = ep_pending
+                    ep_pending = nothing
+                end
             end
         end
         m = match(r"E_p\s*=\s*(\S+)", line)
@@ -289,7 +300,7 @@ function _oszicar_energy_moments(path::AbstractString, energy_kind::Symbol, mint
             c = m.captures[1]
             if c !== nothing
                 v = tryparse(Float64, c)
-                v === nothing || (ep = v)
+                v === nothing || (ep_pending = v)
             end
         end
     end
@@ -311,6 +322,7 @@ function _oszicar_field(path::AbstractString, nat::Int)::Union{Matrix{Float64},N
     tmp = zeros(3, nat)
     in_block = false
     got = false
+    last_got = false
     seen = false
     anygot = false
     for line in eachline(path)
@@ -332,18 +344,33 @@ function _oszicar_field(path::AbstractString, nat::Int)::Union{Matrix{Float64},N
                 anygot = true
                 continue
             else
+                # Commit UNCONDITIONALLY on block end — gating the copy on `got`
+                # meant an empty final block (constraint released on the last step,
+                # or a truncated file) silently kept an EARLIER block's stale field,
+                # violating "the last block wins".
                 in_block = false
-                got && (field .= tmp)
+                field .= tmp
+                last_got = got
             end
         end
     end
-    in_block && got && (field .= tmp)                   # block running at EOF
+    if in_block
+        field .= tmp                                    # block running at EOF
+        last_got = got
+    end
     if seen && !anygot
         # A `lambda*MW_perp` header with no parseable rows: a malformed/renamed block
         # format would otherwise be indistinguishable from a computed-and-zero field.
         @warn "OSZICAR has lambda*MW_perp block(s) but no parseable field rows — " *
               "treating as computed-and-zero; if the block format changed, this is " *
               "a parser drift" path
+    elseif seen && !last_got
+        # Earlier blocks had rows but the FINAL one — the one that wins — did not.
+        # The all-zero field is the honest reading (the constraint stopped acting),
+        # but say so: a truncated tail looks identical.
+        @warn "OSZICAR's final lambda*MW_perp block has no parseable field rows — " *
+              "treating the last step's field as computed-and-zero (constraint " *
+              "released, or the file is truncated mid-block)" path
     end
     return seen ? field : nothing
 end
@@ -485,8 +512,15 @@ function _process_template(base)
                 # dropped; re-emitted from the sampled directions
             else
                 key == "I_CONSTRAINED_M" && (has_icm = true)
-                key == "SAXIS" &&
-                    (saxis = Tuple(_parse_floats(strip(split(segment, '='; limit = 2)[2]))))
+                if key == "SAXIS"
+                    sv = _parse_floats(strip(split(segment, '='; limit = 2)[2]))
+                    # Validate HERE: 2 components used to surface as a BoundsError
+                    # deep inside `_saxis_rotation`, and 4 were silently truncated.
+                    length(sv) == 3 || throw(ArgumentError(
+                        "template SAXIS has $(length(sv)) components; expected 3 " *
+                        "(line: $(strip(segment)))"))
+                    saxis = (sv[1], sv[2], sv[3])
+                end
                 push!(kept_segments, segment)
             end
         end
@@ -510,7 +544,11 @@ function _magmoms_from_template(magmom::Vector{Float64}, n::Int)::Vector{Float64
     if length(magmom) == 3n
         return [norm(@view magmom[3(a-1)+1:3a]) for a = 1:n]
     elseif length(magmom) == n
-        return copy(magmom)
+        # A collinear MAGMOM carries the moment's SIGN (its direction along ±z) —
+        # `MAGMOM = 3*3.0 3*-3.0` is the standard AFM idiom — while this function's
+        # contract is magnitudes (`_moment_matrix` requires ≥ 0, as the noncollinear
+        # branch's `norm` already guarantees). Take |·|, matching that branch.
+        return abs.(magmom)
     end
     throw(ArgumentError("template MAGMOM has $(length(magmom)) entries; expected $n (collinear) " *
                         "or $(3n) (noncollinear) for $n atoms"))

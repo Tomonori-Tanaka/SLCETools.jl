@@ -137,7 +137,9 @@ Inherited from the core (`SLCE`'s `CLAUDE.md`); the ones this package leans on:
   unconstrained". `Oszicar(...; setup_id = ...)` stamps the computational-setup label
   (`SLCEDataset` rejects cross-setup mixtures). (6) **The energy excludes `E_p`**: a
   constrained run's `F`/`E0` carry exactly one copy of the constraint penalty, and the
-  reader subtracts the file's last `E_p = …` value (warning above `ep_warn`) — the fitted
+  reader subtracts the `E_p = …` value belonging to the accepted step — the last one
+  printed BEFORE the accepted `F=` line (warning above `ep_warn`); a dangling `E_p`
+  from a truncated tail whose own `F=` never got written is ignored — the fitted
   Hamiltonian must never see the penalty. Absent-≠-zero applies here too: no `E_p` line
   means an unconstrained run, and nothing is subtracted. Gates: `test/unit/test_vaspio.jl` (read),
   `test/unit/test_vasp_incar.jl` (write, round-trip / order / formatting), `test/oracle/`

@@ -164,3 +164,16 @@ end
         @test z20 ≈ MR.multipole_average(c, lmax)[MR.Harmonics.lm_index(2, 0)] atol = 2e-2
     end
 end
+
+@testset "engine doors: mis-sized coefficient fields are refused (review 2026-08-11)" begin
+    # `multipole_average(q, c, lmax)` reads `c[lm_index(l, m)]` for every l ≤ lmax
+    # under `@inbounds`; before the door it returned a plausible-looking vector built
+    # from out-of-bounds memory for a short `c`.
+    q = MR.sphere_quadrature(4)
+    short = zeros(4)
+    short[MR.Harmonics.lm_index(1, 0)] = 1.0
+    @test_throws ArgumentError MR.multipole_average(q, short, 4)
+    @test_throws ArgumentError MR.multipole_average(zeros(5), 1)       # not (lmax+1)²
+    @test_throws ArgumentError MR.site_potential(zeros(5), [0.0, 0.0, 1.0])
+    @test length(MR.multipole_average(q, zeros(25), 4)) == 25          # covering: fine
+end

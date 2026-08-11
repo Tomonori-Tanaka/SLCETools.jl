@@ -153,6 +153,53 @@ end
         @test read_configs(Oszicar(pu))[1].energy ≈ -84.314080
     end
 
+    @testset "OSZICAR — E_p is paired with its own step (review 2026-08-11)" begin
+        # A truncated tail: step 1 completes (E_p, F=); the job dies after printing
+        # step 2's first E_p but before step 2's own F=. The dangling E_p belongs to
+        # no accepted energy and must not be subtracted from step 1's (the pre-review
+        # reader computed -9 - 9.9 here).
+        tail = " E_p =  0.90000E-02  lambda =  0.200E+01\n" *
+               " ion MW_int M_int\n   1  1.0 0.0 0.0  1.0 0.0 0.0\n" *
+               "   1 F= -.90E+01 E0= -.90E+01 d E = 0\n" *
+               " E_p =  0.99000E+01  lambda =  0.200E+01\n"
+        dt = @test_logs (:warn, r"E_p") match_mode = :any read_configs(
+            Oszicar(_write(dir, "OSZICAR_ep_tail", tail)))[1]
+        @test dt.energy ≈ -9.0 - 0.009                    # step 1's own E_p, by hand
+
+        # A final step with no E_p lines of its own (constraint released): nothing is
+        # subtracted — the earlier step's penalty must not leak forward either.
+        rel = " E_p =  0.90000E+00  lambda =  0.200E+01\n" *
+              " ion MW_int M_int\n   1  1.0 0.0 0.0  1.0 0.0 0.0\n" *
+              "   1 F= -.90E+01 E0= -.90E+01 d E = 0\n" *
+              " ion MW_int M_int\n   1  1.0 0.0 0.0  1.0 0.0 0.0\n" *
+              "   1 F= -.10E+02 E0= -.10E+02 d E = 0\n"
+        dr = @test_logs read_configs(Oszicar(_write(dir, "OSZICAR_ep_rel", rel)))[1]
+        @test dr.energy ≈ -10.0                           # untouched, and no warning
+    end
+
+    @testset "OSZICAR — an empty final constraint block wins as zero (review 2026-08-11)" begin
+        # Step 1 carries a nonzero constrained field; step 2's `lambda*MW_perp` header
+        # prints but the block has no rows (constraint released, or truncation).
+        # "The last block wins": the field must read computed-and-zero — the
+        # pre-review reader kept step 1's stale values silently.
+        two = _oszicar_text() *
+              " ion                    MW_int                       M_int\n" *
+              "   1  1.0 0.0 0.0  1.1 0.0 0.0\n   2  0.0 0.0 2.0  0.0 0.0 2.1\n" *
+              " lambda*MW_perp\n" *
+              "   1 F= -.90E+01 E0= -.90E+01 d E = 0\n"
+        pth = _write(dir, "OSZICAR_empty_last_block", two)
+        f = @test_logs (:warn, r"final lambda\*MW_perp") match_mode = :any (
+            SLCETools.VASP._oszicar_field(pth, 2))
+        @test f == zeros(3, 2)
+        # a single empty block among none-with-rows keeps the original warning
+        one = " ion MW_int M_int\n   1  1.0 0.0 0.0  1.0 0.0 0.0\n" *
+              " lambda*MW_perp\n" *
+              "   1 F= -.90E+01 E0= -.90E+01 d E = 0\n"
+        f1 = @test_logs (:warn, r"no parseable field rows") match_mode = :any (
+            SLCETools.VASP._oszicar_field(_write(dir, "OSZICAR_only_empty_block", one), 1))
+        @test f1 == zeros(3, 1)
+    end
+
     @testset "OSZICAR — SAXIS rotates moments/fields into the Cartesian frame" begin
         p = _write(dir, "OSZICAR3", _oszicar_text())
         d0 = read_configs(Oszicar(p))[1]                                  # saxis = ẑ → identity

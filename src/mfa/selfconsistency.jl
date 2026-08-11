@@ -38,13 +38,19 @@ end
 
 # Bisection root of a function that brackets a sign change on [lo, hi]; orientation-
 # agnostic. Used for the monotone mean-field self-consistency (avoids a Roots dependency).
+# Convergence is judged on the BRACKET alone — an `|f(m)| ≤ tol` early exit is not
+# scale-free: near τ → 1 the self-consistency has `f'(m*) ≈ 2(1/τ − 1) → 0`, so the
+# absolute-residual clause fired at `|m − m*| ≈ tol/f'`, costing 6–9 digits exactly
+# where `_langevin`'s 0.03 crossover had just bought them (measured: rel. error 8.6e-6
+# at τ = 0.99999 with the clause, ≲ 1e-9 without; the bracket criterion costs ~40 more
+# halvings out of the `maxit = 200` budget).
 function _bisect(f, lo::Float64, hi::Float64; tol::Float64 = 1.0e-12, maxit::Int = 200)::Float64
     a, b = lo, hi
     fa = f(a)
     for _ = 1:maxit
         m = 0.5 * (a + b)
+        (b - a) <= tol && return m
         fm = f(m)
-        (abs(fm) <= tol || (b - a) <= tol) && return m
         if (fa < 0) == (fm < 0)
             a, fa = m, fm
         else
@@ -189,6 +195,10 @@ function _tensor_state(exch::ExchangeModel, ehat::Vector{SVector{3,Float64}}, ρ
         cs = Vector{Vector{Float64}}(undef, n)
         m = Vector{Float64}(undef, n)
         ones_m = ones(n)
+        # Relative gate, like `_multipole_state`'s `1e-12·(1 + norm(cs))` sibling: `g`
+        # carries the model's energy units, so a bare 1e-12 would misclassify a
+        # deliberately rescaled model (τ is scale-invariant; this gate must be too).
+        gscale = maximum(M -> maximum(abs, M), exch.bilinear)
         @inbounds for a = 1:n
             g = _molecular_field(exch, ehat, ones_m, a)
             # The order parameter saturates (m → 1) only with a net l=1 molecular field. An
@@ -196,7 +206,7 @@ function _tensor_state(exch::ExchangeModel, ehat::Vector{SVector{3,Float64}}, ρ
             # distribution, so ⟨e·ê_a⟩ → 0 — continuous with the τ just above the floor (where
             # m = (4π/3) _l1_field(⟨Z⟩)·ê_a → 0), not 1. The sharply-peaked cs (built from the
             # ordered means) still gives the correct symmetric draw.
-            m[a] = norm(g) > 1.0e-12 ? 1.0 : 0.0
+            m[a] = norm(g) > 1.0e-12 * (1 + gscale) ? 1.0 : 0.0
             cs[a] = _site_coeffs(g, exch.onsite[a], β)
         end
         return cs, m

@@ -40,16 +40,19 @@ end
 Extract the full bilinear exchange (`ls=[1,1]`: Heisenberg + DMI + anisotropic) and the
 single-ion anisotropy (`ls=[2]`) of a fitted `SLCEModel` into an [`ExchangeModel`](@ref),
 via the core's public `bilinear_terms` extraction. The bond matrices are placed
-directionally (`bilinear[a,b] = S_ab`, the reverse member transposed), so the molecular
-field is `g_a = Σ_b S_ab ⟨e_b⟩`. Only the higher-order / higher-`l` SALCs (3-body and up)
-are dropped — captured instead by the full [`MultipoleModel`](@ref) path — and reported via
-`@warn`.
+directionally (`bilinear[a,b] = S_ab`, the reverse member transposed), so the field
+contraction is `g_a = Σ_b S_ab ⟨e_b⟩` (the aligning molecular field is `h_a = −g_a`).
+SALCs outside these two channels — higher-order, higher-`l`, or displacement-carrying
+(a joint model is read at its clamped-ion `u = 0` point) — are dropped and reported via
+`@warn`; on a pure-spin model the full [`MultipoleModel`](@ref) path keeps the spin ones.
 """
 function ExchangeModel(model::SLCEModel)
     bilinear, onsite, nselfbond, nskipped = _extract_bilinear_onsite(model)
     nskipped > 0 && @warn "ExchangeModel keeps the bilinear (Heisenberg + DMI + anisotropic) " *
-        "and single-ion channels; dropped $nskipped higher-order / higher-l SALC(s) " *
-        "(use the full SLCE `MFASampler(model; reference)` to keep them)."
+        "and single-ion channels; dropped $nskipped SALC(s) outside them (higher-order, " *
+        "higher-l, or displacement-carrying — a joint model is read at its clamped-ion " *
+        "u = 0 point). On a pure-spin model, `MFASampler(model; reference)` keeps the " *
+        "dropped spin channels; a joint model has no full-multipole MFA path."
     nselfbond > 0 && @warn "ExchangeModel: skipping $nselfbond on-site (a == image-of-a) " *
         "bilinear term(s); the rigid-axis mean field does not represent them (only reachable " *
         "via AllImages). The default MinimumImage selection drops such self-pairs."

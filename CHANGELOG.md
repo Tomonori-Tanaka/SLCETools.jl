@@ -6,6 +6,63 @@ release, so everything lives under *Unreleased*.
 
 ## [Unreleased]
 
+### Fixed — OSZICAR reader: three silent-corruption paths (review 2026-08-11 M8/M9/M10)
+
+- **An empty final `lambda*MW_perp` block now wins as computed-and-zero.** The
+  copy was gated on the block having parseable rows, so a final block whose
+  constraint no longer acted (or a file truncated mid-block) silently kept an
+  EARLIER block's stale nonzero field — injecting stale torque targets into a
+  co-fit. The commit is now unconditional per block, with a warning naming the
+  empty-final-block case.
+- **`E_p` is paired with its own ionic step.** Energy and penalty were
+  independently last-wins over the whole file, so a truncated/still-running
+  OSZICAR whose tail printed a new `E_p` but no `F=` subtracted an unrelated
+  step's penalty (silently, below `ep_warn`). The committed `E_p` is now the
+  last one printed before the accepted `F=` line; a final step with no `E_p`
+  lines of its own subtracts nothing.
+- **A signed collinear template MAGMOM yields magnitudes.** The `n`-length
+  branch of `_magmoms_from_template` returned the raw signed values
+  (`MAGMOM = 3*3.0 3*-3.0`, the standard AFM idiom, then died far away in
+  `_moment_matrix`'s non-negativity check); it now takes `|·|`, matching the
+  noncollinear branch's norm. This path was previously untested.
+
+### Fixed — engine doors: mis-sized coefficient fields are refused (review 2026-08-11 M7)
+
+`multipole_average(q, c, lmax)` read `c[lm_index(l, m)]` for every `l ≤ lmax`
+under `@inbounds` with no size check — a public-API out-of-bounds read returning
+a plausible-looking multipole vector for a short `c`. All three methods now
+require `(lmax+1)² ≤ length(c)` (via `_field_lmax`, which also enforces the
+perfect square), and `site_potential` derives its order through `_field_lmax`
+instead of a bare `isqrt` (a mis-sized field used to silently lose its tail).
+
+### Fixed — `_bisect` converges on the bracket alone
+
+**Changes `thermal_averaged_m` near `T_MF` at up to the ~1e-5 relative level.**
+The absolute `|f(m)| ≤ tol` early exit is not scale-free: near `τ → 1`,
+`f'(m*) ≈ 2(1/τ − 1) → 0`, so it fired at `|m − m*| ≈ tol/f'` — rel. error
+8.6e-6 at τ = 0.99999, throwing away the digits the 0.03 `_langevin` crossover
+had just bought, and making `thermal_averaged_m` disagree with the Anderson
+path by ~1e-5. Bracket-only convergence reaches ≤ 9.4e-13 absolute across the
+grid. New gate: a 256-bit BigFloat bisection oracle, bound 5e-12 absolute (≥ 5×
+headroom; the reverted early exit leaves 3.5e-7 at τ = 0.99999, so the mutation
+is resolved by 5 orders).
+
+### Fixed — smaller review items
+
+- `_tensor_state`'s ordered-limit gate `norm(g) > 1e-12` is now relative to the
+  exchange scale (`g` carries the model's energy units; τ is scale-invariant,
+  so the gate must be too — the `_multipole_state` sibling already was).
+- Template `SAXIS` is validated at parse: 2 components used to surface as a
+  `BoundsError` deep inside `_saxis_rotation`, 4 were silently truncated.
+- Every `read_poscar` error message now names the file path (a loop over many
+  POSCARs used to fail with "bad lattice vector on line 3" and no file).
+- `ExchangeModel(model)`'s dropped-SALC warning no longer mislabels
+  displacement-carrying SALCs as "higher-l" and no longer recommends
+  `MFASampler(model)` on a joint model (the one call that would then throw);
+  the "molecular field" naming collision between `exchange.jl`'s two sign
+  conventions is resolved (the aligning field is `h = −g`; `g` is the raw
+  contraction `_site_coeffs` consumes).
+
 ### Fixed — `_langevin`'s series/closed-form crossover lowered 0.1 → 0.03
 
 **Changes fitted numbers at the ~1e-9 relative level near `T_MF`.** At the old
