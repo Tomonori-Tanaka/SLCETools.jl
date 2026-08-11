@@ -56,8 +56,8 @@ SLCETools.VASP.Oszicar
 
 To turn sampled spin configurations into DFT jobs — the active-learning "label" step — write
 the INCAR (and optionally a matching POSCAR). A sampler produces unit **directions**; the
-moment **magnitudes** (μ_B) come from elsewhere — a template INCAR's existing `MAGMOM` (each
-atom's norm), a per-species map, or an explicit per-atom vector.
+moment **magnitudes** (μ_B) come from elsewhere — a per-species map, an explicit per-atom
+vector, or (in `write_incar` only) a template INCAR's existing `MAGMOM` norms.
 
 [`write_inputs`](@ref SLCETools.VASP.write_inputs) writes a `POSCAR` (via
 [`write_poscar`](@ref SLCETools.VASP.write_poscar)) and a matching `INCAR`, with the
@@ -82,8 +82,13 @@ SLCETools.VASP.write_inputs("runs", crystal, samp.configs; magmoms = Dict("Fe" =
 ### Moment magnitudes
 
 `magmoms` accepts (in `write_inputs`): a scalar (uniform), a per-atom vector (crystal atom
-order), a per-species `Dict("Fe" => 2.2, …)`, or `nothing` (default) to take each atom's
-magnitude from the `base` template's `MAGMOM` norms. The written `MAGMOM` for an atom is
+order), or a per-species `Dict("Fe" => 2.2, …)` — and it is **required** there: a `base`
+template's own `MAGMOM` is refused as a magnitude source, because a template's `MAGMOM` is
+in the *previous run's* POSCAR order, which `write_inputs` cannot map onto the crystal's
+atom order (on an ungrouped crystal each magnitude would land on the wrong atom, silently).
+In `write_incar`, where the atom order is the caller's, `magmoms = nothing` (default) still
+takes each atom's magnitude from the template's `MAGMOM` norms. The written `MAGMOM` for an
+atom is
 `magnitude · direction`; with `constrain = true` (default) the same vectors go to `M_CONSTR`
 for a direction-constrained run.
 

@@ -6,6 +6,30 @@ release, so everything lives under *Unreleased*.
 
 ## [Unreleased]
 
+### Changed — `write_inputs` refuses a template MAGMOM as a magnitude source
+
+**Breaking** for callers who relied on `write_inputs(...; base = <INCAR>)` with no
+explicit `magmoms`. A template INCAR's MAGMOM is in the *previous run's* POSCAR
+(species-grouped) order; `write_inputs` documented the magnitudes it resolves as
+crystal-ordered and then applied the POSCAR permutation on top, so on a crystal
+whose species are not already grouped each magnitude landed on the wrong atom —
+silently, with both files internally well-formed (audit 2026-08-01 #18; verified
+on `species = [1,2,1]`, where the second Fe got Nd's moment). Convention decision
+(option c): the template's MAGMOM is now **refused** as a magnitude source with a
+message naming the two escapes — pass `magmoms` explicitly (scalar / per-atom in
+crystal order / per-species map), or call `write_incar` directly to reuse a
+template's magnitudes verbatim in the caller's own atom order. A template with
+explicit `magmoms` keeps working: its other tags are reused and its MAGMOM /
+M_CONSTR lines replaced, as before.
+
+New gates: the refusal itself (fires before anything is written); `base =`
+coverage with explicit magnitudes (previously zero); a POSCAR↔INCAR per-atom
+identity gate whose oracle matches atoms by *position* through `read_poscar`
+(never `_poscar_order`) on a species pattern whose grouping permutation is
+non-involutive (`[2,1,2,1]` — the old `[2,1,2]` fixture had `perm == invperm`,
+so a perm↔invperm mutation was unkillable); and the same identity on a B2 FeRh
+`(3,1,1)` supercell with interleaved species.
+
 ### Changed — `reference`/`init` matrices use the family unit-direction door
 
 **Breaking for callers who passed scaled spin vectors.** The MFA and Metropolis

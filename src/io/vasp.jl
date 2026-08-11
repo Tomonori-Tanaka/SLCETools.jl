@@ -630,7 +630,14 @@ INCAR's MAGMOM / M_CONSTR are ordered to match the POSCAR (atoms grouped by spec
 files are always consistent.
 
 `magmoms` may additionally be a per-species `label => magnitude` map here (resolved through the
-crystal); everything else is forwarded to [`write_incar`](@ref). The second form writes a sweep:
+crystal), and it is **required**: a `base` template's own MAGMOM is refused as a magnitude
+source. A template MAGMOM is in the *previous run's* POSCAR order, which this function cannot
+map onto `crystal`'s atom order — on a crystal whose species are not already grouped, each
+magnitude would land on the wrong atom with both files internally well-formed (audit 2026-08-01
+#18). The template's other tags are still reused verbatim (its MAGMOM / M_CONSTR lines are
+replaced); to take magnitudes from a template verbatim, call [`write_incar`](@ref) directly,
+where the atom order is the caller's. Everything else is forwarded to [`write_incar`](@ref).
+The second form writes a sweep:
 one subdirectory `"<prefix>-NNN"` per configuration in `configs` (e.g. pass `samp.configs` from
 an `MFASample`). Returns the directory (or the vector of directories).
 """
@@ -639,12 +646,27 @@ function write_inputs(dir::AbstractString, crystal::Crystal, config::AbstractMat
                       kwargs...)
     n_atoms(crystal) == size(config, 2) || throw(ArgumentError(
         "config has $(size(config, 2)) atoms but the crystal has $(n_atoms(crystal))"))
+    n = n_atoms(crystal)
+    if magmoms === nothing
+        tmpl_mag = base === nothing ? nothing : _process_template(base)[2]
+        throw(ArgumentError(tmpl_mag === nothing ?
+            "no `magmoms` given; pass a scalar, a per-atom vector (crystal atom order), " *
+            "or a per-species `label => magnitude` map" :
+            "the `base` template carries a MAGMOM, and `write_inputs` refuses to take " *
+            "magnitudes from it: a template MAGMOM is in the previous run's POSCAR " *
+            "order, which cannot be mapped onto this crystal's atom order — on a " *
+            "crystal whose species are not already grouped, each magnitude would land " *
+            "on the wrong atom with both files internally well-formed. Pass `magmoms` " *
+            "explicitly (a scalar, a per-atom vector in crystal atom order, or a " *
+            "per-species map); to reuse a template's magnitudes verbatim, call " *
+            "`write_incar` directly, where the atom order is the caller's"))
+    end
     mkpath(dir)
     write_poscar(joinpath(dir, "POSCAR"), crystal; comment = comment)
 
-    n = n_atoms(crystal)
-    tmpl_mag = base === nothing ? nothing : _process_template(base)[2]
-    mags = _resolve_magmoms(magmoms, n, crystal.species, crystal.species_labels, tmpl_mag)
+    # `nothing` for the template magnitudes on purpose: the refusal above is the only
+    # reader of the template's MAGMOM here, so the resolution below cannot reach it.
+    mags = _resolve_magmoms(magmoms, n, crystal.species, crystal.species_labels, nothing)
     perm = _poscar_order(crystal)
     write_incar(joinpath(dir, "INCAR"), config[:, perm]; magmoms = mags[perm], base = base,
                 kwargs...)

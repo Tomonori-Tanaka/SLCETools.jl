@@ -121,7 +121,13 @@ Inherited from the core (`SLCE`'s `CLAUDE.md`); the ones this package leans on:
   the identity. The INCAR's *declared* SAXIS line and the frame the moments are written in must
   always agree (template SAXIS honoured / overridden together). (2) **Atom order** —
   `_poscar_order` must reproduce `write_poscar`'s species grouping exactly, or `write_inputs`
-  silently misassigns moments to atoms. (3) **MAGMOM = magnitude · direction**, M_CONSTR ==
+  silently misassigns moments to atoms; the readback gates in `test_vasp_incar.jl` match
+  atoms by POSITION through `read_poscar` (never `_poscar_order`) on non-involutive
+  species patterns, so a perm↔invperm mutation is killable. A `base` template's own
+  MAGMOM is REFUSED as a magnitude source in `write_inputs` (audit #18, option c): it is
+  in the previous run's POSCAR order, which cannot be mapped onto the crystal — only
+  `write_incar`, where the atom order is the caller's, may take magnitudes from a
+  template. (3) **MAGMOM = magnitude · direction**, M_CONSTR ==
   MAGMOM under `constrain`. (4) The **torque sign / TrainingDatum layout** is owned upstream by
   `SLCE`'s `dftsource.jl` (`τ_a = m_a × B_a`); the OSZICAR reader must keep producing
   that. (5) **Absent ≠ zero**: an OSZICAR with no `lambda*MW_perp` block yields

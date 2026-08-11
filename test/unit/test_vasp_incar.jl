@@ -204,6 +204,88 @@ _unit(v) = v / norm(v)
         end
     end
 
+    @testset "write_inputs refuses a template MAGMOM as magnitude source (#18)" begin
+        base = "ENCUT = 520\nMAGMOM = 0 0 3  0 0 1  0 0 3\n"
+        # the refusal: a template MAGMOM is in the PREVIOUS run's POSCAR order and
+        # cannot be mapped onto this crystal — and it fires before anything is written
+        d = mktempdir()
+        err = try
+            V.write_inputs(d, cr, config; base = base)
+            nothing
+        catch e
+            e
+        end
+        @test err isa ArgumentError && occursin("previous run's POSCAR order", err.msg)
+        @test !isfile(joinpath(d, "POSCAR"))
+        # no magmoms and no template MAGMOM still errors, with the plain message
+        @test_throws ArgumentError V.write_inputs(mktempdir(), cr, config;
+                                                  base = "ENCUT = 520\n")
+        # explicit magmoms + template: other tags reused, MAGMOM replaced (not the
+        # template's 3,1,3), exactly one MAGMOM line — the G3 `base =` coverage
+        d2 = mktempdir()
+        V.write_inputs(d2, cr, config; base = base,
+                       magmoms = Dict("A" => 3.0, "B" => 1.0), constrain = false)
+        inc = joinpath(d2, "INCAR")
+        @test occursin("ENCUT = 520", read(inc, String))
+        @test count(l -> occursin("MAGMOM", l), collect(eachline(inc))) == 1
+        # POSCAR order groups species-index 1 ("A", model atom 2) first: B=1 map value
+        # on the two "B" atoms, A=3 on the one "A" atom ⇒ magnitudes (3, 1, 1)
+        M = reshape(incar_floats(inc, "MAGMOM"), 3, 3)
+        @test [norm(M[:, k]) for k = 1:3] ≈ [3.0, 1.0, 1.0] atol = 1e-9
+    end
+
+    @testset "POSCAR↔INCAR atom identity via readback (non-involutive perm)" begin
+        # The oracle never touches `_poscar_order`: each POSCAR row is matched back to
+        # its model atom by its (unique) fractional position through `read_poscar`, and
+        # the INCAR column must carry THAT atom's magnitude and direction. The fixture's
+        # species pattern [2,1,2,1] makes the grouping permutation NON-involutive
+        # (perm = [2,4,1,3], invperm = [3,1,4,2]) — the old [2,1,2] fixture had
+        # perm == invperm, so a perm↔invperm mutation in the writer was unkillable.
+        lat4 = Lattice([6.0 0 0; 0 6.0 0; 0 0 6.0])
+        frac4 = [0.0 0.1 0.2 0.3; 0.0 0.15 0.25 0.35; 0.0 0.05 0.45 0.65]
+        cr4 = Crystal(lat4, frac4, [2, 1, 2, 1], ["A", "B"])
+        mags4 = [10.0, 20.0, 30.0, 40.0]                       # crystal atom order
+        cfg4 = mapreduce(_ -> _unit(randn(rng, 3)), hcat, 1:4)
+        d = mktempdir()
+        V.write_inputs(d, cr4, cfg4; magmoms = mags4, constrain = false)
+        reloaded = V.read_poscar(joinpath(d, "POSCAR"))
+        src = [findfirst(a -> isapprox(reloaded.frac_positions[:, k], frac4[:, a];
+                                       atol = 1e-8), 1:4) for k = 1:4]
+        @test sort(src) == [1, 2, 3, 4]                        # a bijection
+        # species identity survived the regrouping (G1)
+        @test all(reloaded.species_labels[reloaded.species[k]] ==
+                  cr4.species_labels[cr4.species[src[k]]] for k = 1:4)
+        # and the INCAR's column k is the moment of exactly that atom (G2)
+        M = reshape(incar_floats(joinpath(d, "INCAR"), "MAGMOM"), 3, 4)
+        for k = 1:4
+            @test M[:, k] ≈ mags4[src[k]] .* cfg4[:, src[k]] atol = 1e-9
+        end
+    end
+
+    @testset "B2 FeRh (3,1,1): interleaved species stay atom-aligned (G4)" begin
+        # a real named system whose supercell interleaves species in model order
+        # (Fe, Rh per cell → [1,2,1,2,1,2]); grouping is again non-involutive
+        a0 = 2.99
+        latF = Lattice([3a0 0 0; 0 a0 0; 0 0 a0])
+        fracF = [0.0 1/6 1/3 1/2 2/3 5/6; 0.0 0.5 0.0 0.5 0.0 0.5; 0.0 0.5 0.0 0.5 0.0 0.5]
+        crF = Crystal(latF, fracF, [1, 2, 1, 2, 1, 2], ["Fe", "Rh"])
+        magF = Dict("Fe" => 3.2, "Rh" => 1.0)
+        cfgF = mapreduce(_ -> _unit(randn(rng, 3)), hcat, 1:6)
+        d = mktempdir()
+        V.write_inputs(d, crF, cfgF; magmoms = magF, constrain = true)
+        reloaded = V.read_poscar(joinpath(d, "POSCAR"))
+        src = [findfirst(a -> isapprox(reloaded.frac_positions[:, k], fracF[:, a];
+                                       atol = 1e-8), 1:6) for k = 1:6]
+        @test sort(src) == collect(1:6)
+        M = reshape(incar_floats(joinpath(d, "INCAR"), "MAGMOM"), 3, 6)
+        for k = 1:6
+            lbl = crF.species_labels[crF.species[src[k]]]
+            @test M[:, k] ≈ magF[lbl] .* cfgF[:, src[k]] atol = 1e-9
+        end
+        @test incar_floats(joinpath(d, "INCAR"), "M_CONSTR") ≈
+              incar_floats(joinpath(d, "INCAR"), "MAGMOM")
+    end
+
     @testset "sweep: one subdirectory per configuration" begin
         root = mktempdir()
         configs = [mapreduce(_ -> _unit(randn(rng, 3)), hcat, 1:3) for _ = 1:4]
