@@ -80,7 +80,9 @@ Inherited from the core (`SLCE`'s `CLAUDE.md`); the ones this package leans on:
   `selfconsistency.jl`'s `_accumulate_term!` (same `μ = idx − l − 1` mapping and
   rank-specialized barrier, concrete `Z(e_b)` instead of `⟨Z⟩`), and the sweep reuses
   the engine's proposal (`_rotate` + `_METROPOLIS_FLIP_FRACTION`) and the MFA sampler's
-  `_random_rotation` / `_normalize_reference`. Change one side and re-check the
+  `_random_rotation` / `_unit_reference` (the family's projecting unit-direction
+  door — delegates to `SLCE.SpinConfiguration`, refuses a scaled column rather
+  than normalizing it). Change one side and re-check the
   machine-precision local↔global gate in `test_mc_sampler.jl`.
 - **`mfa/engine.jl` (`MeanFieldEngine`) ↔ `SLCE.Harmonics`** (`Zlm`, `lm_index`): the
   engine primitives (`site_potential`, the vMF / Metropolis draws, the quadrature) evaluate

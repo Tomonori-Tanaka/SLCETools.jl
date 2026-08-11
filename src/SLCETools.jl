@@ -30,7 +30,7 @@ using Random: AbstractRNG, default_rng
 # core's tesseral spherical-harmonic kernel, imported so the moved sampler files keep their
 # `Harmonics.Zlm` / `Harmonics.lm_index` calls unchanged.
 import SLCE.Harmonics
-using SLCE: SLCEModel, spin_multipole_terms, SpinMultipoleTerm, bilinear_terms,
+using SLCE: SLCE, SLCEModel, spin_multipole_terms, SpinMultipoleTerm, bilinear_terms,
     Crystal
 # The kelvin ↔ model-energy conversion is the core's to own — this package used to carry a
 # character-for-character copy of both, as did SLCEMonteCarlo.

@@ -167,7 +167,9 @@ reference direction; the per-atom concentration is set by the mean-field self-co
 at the reduced temperature `τ` (or magnetization `m`), via [`sample`](@ref).
 
 - `MFASampler(reference)` — the single global, isotropic sampler (P1): `reference` is a
-  `3 × n_atoms` matrix of seed directions (columns normalized on construction), and all
+  `3 × n_atoms` matrix of unit seed directions (each column must be within `1e-6` of
+  unit norm and is projected exactly onto the sphere on construction; a scaled column
+  is refused — normalize deliberately in your own code), and all
   atoms share one concentration `κ = 3m/τ`, `m = L(3m/τ)`. No couplings; works in reduced
   units (`mfa_temperature_scale` returns `1.0`).
 - `MFASampler(exch; reference)` — the [`ExchangeModel`](@ref)-backed sampler (P2/P3): the

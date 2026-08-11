@@ -6,6 +6,21 @@ release, so everything lives under *Unreleased*.
 
 ## [Unreleased]
 
+### Changed — `reference`/`init` matrices use the family unit-direction door
+
+**Breaking for callers who passed scaled spin vectors.** The MFA and Metropolis
+samplers' `reference` (and the Metropolis `init`) no longer normalize anything
+nonzero: `_unit_reference` (formerly `_normalize_reference`) delegates to
+`SLCE.SpinConfiguration` — each column must be finite and within `1e-6` of unit
+norm, and is projected exactly onto the sphere; a moment-scaled column
+(`‖e‖ = 1.7`) is **refused** with a message telling the caller to normalize
+deliberately. This closes the audit 2026-08-01 #1 rank-3 inconsistency (the
+same matrix was refused at SLCE's doors and silently normalized here) and
+removes the silent-laundering path for wrong objects (a transposed 3×3 block, a
+moment matrix) that unconditional normalization admitted. For a column the old
+door accepted as already unit-to-rounding, the projection is the identical
+`v/‖v‖` arithmetic, so sampler output is unchanged for legal inputs.
+
 ### Changed — internal names spelled out (no public surface touched)
 
 The `STYLE_GUIDE.md` §1 naming contract's safe tier, applied: internal locals and

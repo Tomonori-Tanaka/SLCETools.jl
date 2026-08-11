@@ -23,32 +23,30 @@ function _random_rotation(rng::AbstractRNG)::SMatrix{3,3,Float64}
     ]
 end
 
-# Normalize a 3 × n_atoms reference matrix to unit columns, validating shape and norms.
-function _normalize_reference(reference::AbstractMatrix{<:Real})::Matrix{Float64}
+# The family's projecting unit-direction door on a 3 × n_atoms matrix (a reference
+# or a chain start), delegated to `SLCE.SpinConfiguration`: each column must be
+# finite and within 1e-6 of unit norm, and comes back projected exactly onto the
+# sphere. A scaled column (a moment vector, ‖e‖ = 1.7) is REFUSED rather than
+# silently normalized — normalize deliberately in your own code if that is what
+# you mean. (Until 2026-08 this door normalized anything nonzero, accepting here
+# what SLCE's doors refuse — audit 2026-08-01 #1, rank 3.)
+function _unit_reference(reference::AbstractMatrix{<:Real};
+                         what::AbstractString = "reference")::Matrix{Float64}
     size(reference, 1) == 3 ||
-        throw(ArgumentError("reference must be 3 × n_atoms; got $(size(reference))"))
-    n = size(reference, 2)
-    n >= 1 || throw(ArgumentError("reference must have ≥ 1 atom"))
-    ref = Matrix{Float64}(undef, 3, n)
-    for a = 1:n
-        v = SVector{3,Float64}(reference[1, a], reference[2, a], reference[3, a])
-        nv = norm(v)
-        nv > 1.0e-10 || throw(ArgumentError(
-            "reference column $a has ~zero norm; cannot define a direction"))
-        ref[:, a] = v / nv
-    end
-    return ref
+        throw(ArgumentError("$what must be 3 × n_atoms; got $(size(reference))"))
+    size(reference, 2) >= 1 || throw(ArgumentError("$what must have ≥ 1 atom"))
+    return Matrix(SLCE.SpinConfiguration(reference; label = what))
 end
 
-# P1: single global, no couplings. Normalizes and validates the reference.
+# P1: single global, no couplings. Validates and projects the reference.
 function MFASampler(reference::AbstractMatrix{<:Real})
-    return MFASampler(_normalize_reference(reference), nothing, zeros(0, 0), 1.0, 1.0)
+    return MFASampler(_unit_reference(reference), nothing, zeros(0, 0), 1.0, 1.0)
 end
 
 # P4: the full-multipole sampler, backed by a `MultipoleModel` (all SLCE clusters / l). The
 # l=1 temperature scale ρ comes from the bilinear part; the draw is always Metropolis.
 function MFASampler(mf::MultipoleModel; reference::AbstractMatrix{<:Real})
-    ref = _normalize_reference(reference)
+    ref = _unit_reference(reference)
     size(ref, 2) == mf.n_atoms || throw(DimensionMismatch(
         "reference has $(size(ref, 2)) atoms but the MultipoleModel has $(mf.n_atoms)"))
     A = _mfa_matrix(mf.bilinear, ref)
@@ -71,7 +69,7 @@ end
 # the reference, its Perron eigenvalue (T_MF = ρ/3), and checks the reference is a clean,
 # stationary ordered state (warns otherwise — exact for collinear isotropic references, D2).
 function MFASampler(exch::ExchangeModel; reference::AbstractMatrix{<:Real})
-    ref = _normalize_reference(reference)
+    ref = _unit_reference(reference)
     size(ref, 2) == exch.n_atoms || throw(DimensionMismatch(
         "reference has $(size(ref, 2)) atoms but the ExchangeModel has $(exch.n_atoms)"))
     A = _mfa_matrix(exch, ref)

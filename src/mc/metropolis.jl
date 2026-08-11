@@ -67,7 +67,7 @@ struct MetropolisSampler <: AbstractSampler
         ref = if reference === nothing
             nothing
         else
-            r = _normalize_reference(reference)
+            r = _unit_reference(reference)
             size(r, 2) == n_atoms || throw(DimensionMismatch(
                 "reference has $(size(r, 2)) atoms but the sampler has $n_atoms"))
             r
@@ -258,7 +258,7 @@ function _mc_initial_config(s::MetropolisSampler,
                             init::Union{Nothing,AbstractMatrix{<:Real}},
                             rng::AbstractRNG)::Matrix{Float64}
     if init !== nothing
-        config = _normalize_reference(init)
+        config = _unit_reference(init; what = "init")
         size(config, 2) == s.n_atoms || throw(DimensionMismatch(
             "init has $(size(config, 2)) atoms but the sampler has $(s.n_atoms)"))
         return config
@@ -301,8 +301,9 @@ run — call once per temperature for independent chains.
 - `step::Real = 0.6`: proposal rotation-angle scale in radians. Tune against the
   `acceptance` diagnostic (aim for O(0.2–0.6); lower `step` at low temperature).
 - `rng::AbstractRNG = default_rng()`: explicit, seeded RNG (reproducible draws).
-- `init = nothing`: chain start — an explicit `3 × n_atoms` matrix, else the sampler's
-  `reference`, else a uniform-random configuration.
+- `init = nothing`: chain start — an explicit `3 × n_atoms` matrix of unit columns
+  (validated to `1e-6` and projected, like `reference`; a scaled matrix is refused),
+  else the sampler's `reference`, else a uniform-random configuration.
 - `randomize::Bool = false`: apply one uniform random global rotation per **stored**
   configuration (the chain itself is not rotated). For an isotropic model the rotated
   configurations are still exact Boltzmann samples (the energy is invariant) while their

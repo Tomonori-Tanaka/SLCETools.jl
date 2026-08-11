@@ -42,10 +42,15 @@ _zref(n) = repeat(Float64[0, 0, 1], 1, n)
         @test MR.tau_from_magnetization(1.0) == 0.0
     end
 
-    @testset "constructor normalizes and validates the reference" begin
-        s = MFASampler([2.0 0.0; 0.0 -3.0; 0.0 0.0])   # 3×2, non-unit columns
+    @testset "constructor validates and projects the reference (family door)" begin
+        # a scaled column is REFUSED, never silently normalized (until 2026-08
+        # this pinned the opposite: [2,0,0]/[0,-3,0] came back normalized)
+        @test_throws ArgumentError MFASampler([2.0 0.0; 0.0 -3.0; 0.0 0.0])
+        # float noise inside the 1e-6 band is accepted and projected exactly
+        s = MFASampler([1.0+1.0e-7 0.0; 0.0 -1.0; 0.0 0.0])
         @test s.reference[:, 1] ≈ [1.0, 0.0, 0.0]
-        @test s.reference[:, 2] ≈ [0.0, -1.0, 0.0]
+        @test s.reference[:, 2] == [0.0, -1.0, 0.0]
+        @test all(abs(norm(@view s.reference[:, a]) - 1) < 4 * eps() for a = 1:2)
         @test_throws ArgumentError MFASampler(zeros(2, 3))          # wrong leading dim
         @test_throws ArgumentError MFASampler(reshape(Float64[], 3, 0))  # no atoms
         @test_throws ArgumentError MFASampler([0.0 1.0; 0.0 0.0; 0.0 0.0])  # zero column
