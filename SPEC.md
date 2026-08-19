@@ -106,6 +106,15 @@ is the identity:
   constrain, saxis, …)`; `write_inputs(dir | rootdir, crystal, config | configs; …)` (a POSCAR +
   INCAR input set / sweep, atom order matched). Moment magnitudes come from a per-atom vector, a
   scalar, a per-species map, or a template INCAR's MAGMOM.
+- **generate** — `oszicar_to_extxyz(out, oszicars, poscar; incar, constraint_mode, …)`:
+  OSZICARs (+ the POSCAR, since an OSZICAR carries no positions) → the self-contained
+  extended-XYZ training container (`SLCE.write_extxyz`). Reads BOTH moment tables
+  (`MW_int` + `M_int`), subtracts `E_p`, resolves `constraint_mode`/`soc` from the
+  INCAR (`I_CONSTRAINED_M`/`LSORBIT`, cross-checked against a declaration), turns
+  `M_CONSTR` into unit constraint axes (mode 1 requires the INCAR), and runs the
+  axis-consistency gates before writing — the file is verified at birth and never
+  consults the INCAR again. All VASP vocabulary for the adiabatic-moment channel
+  lives here; downstream (`SLCE.read_extxyz` on) is code-neutral.
 
 See `docs/specs/mfa-sampling.md` for the design (decisions D1–D5, phases P0–P4) and the
 physical conventions (`τ = T/T_MF`, `T_MF = ρ/3`, mean-field decoupling, vMF / Bingham).

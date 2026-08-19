@@ -6,6 +6,33 @@ release, so everything lives under *Unreleased*.
 
 ## [Unreleased]
 
+### Added — `oszicar_to_extxyz`: the VASP → extended-XYZ generator (2026-08-20, adiabatic-moment step 2)
+
+`SLCETools.VASP.oszicar_to_extxyz(out, oszicars, poscar; incar, constraint_mode,
+...)` turns constrained-noncollinear OSZICARs (plus the POSCAR that defines the
+structure — an OSZICAR carries no positions) into the self-contained extended-XYZ
+training container `SLCE.write_extxyz` owns. This is the ONE place that knows
+VASP's vocabulary for the adiabatic-moment channel:
+
+- **both** moment tables are read in one pass — `MW_int` (cols 2-4, the smoothed
+  decomposition the constraint acts on) and `M_int` (cols 5-7, `moments_bare`,
+  the projection target) — the `lambda*MW_perp` block becomes the constraining
+  field, `E_p` is subtracted with the `Oszicar` reader's exact pairing rule, and
+  every spin-channel quantity is rotated from the SAXIS frame;
+- `constraint_mode` / `soc` are read from the INCAR (`I_CONSTRAINED_M`,
+  `LSORBIT`) when not declared, and a declared mode is cross-checked against the
+  INCAR (loud on mismatch); **mode 1 requires the INCAR** — the constraint axes
+  live in `M_CONSTR` (normalized to unit axes; zero = unconstrained atom) and
+  cannot be reconstructed from converged moments where `‖M‖ → 0`;
+- the axis-consistency gates (`SLCE.check_moment_gates`) run before writing —
+  a violating set never becomes a file — and the info line records
+  `field_sign=vasp:lambda*MW_perp` plus `source=oszicar:<n>:sha256:<digest>`;
+  after generation the INCAR is never consulted again.
+
+Smoked on the real FeGe τ0.1 archive (20 configs): mode/soc auto-read, bitwise
+read-back, bit-agreement with the production `Oszicar` reader on energy/field,
+∠(MW, M_CONSTR) p99 0.09°. New dep: the `SHA` stdlib (source digests).
+
 ### Fixed — OSZICAR reader: three silent-corruption paths (review 2026-08-11 M8/M9/M10)
 
 - **An empty final `lambda*MW_perp` block now wins as computed-and-zero.** The

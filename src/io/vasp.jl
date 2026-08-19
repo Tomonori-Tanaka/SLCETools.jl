@@ -19,13 +19,15 @@
 module VASP
 
 using Printf
+import SHA
 using StaticArrays
 using LinearAlgebra: norm, det
 using SLCE: Crystal, Lattice, AbstractDFTSource, TrainingDatum, DatumProvenance,
-            spin_datum, n_atoms
+            spin_datum, n_atoms, write_extxyz
 import SLCE: read_configs
 
-export read_poscar, write_poscar, Oszicar, write_incar, write_inputs
+export read_poscar, write_poscar, Oszicar, write_incar, write_inputs,
+       oszicar_to_extxyz
 
 # --- SAXIS frame -------------------------------------------------------------------------
 
@@ -768,5 +770,198 @@ function write_inputs(rootdir::AbstractString, crystal::Crystal,
     end
     return dirs
 end
+
+# ── OSZICAR → extended-XYZ generator ───────────────────────────────────────────────────
+#
+# The ONE place that knows VASP's vocabulary for the adiabatic-moment channel:
+# OSZICAR column layout (MW_int cols 2-4, M_int cols 5-7), the `lambda*MW_perp`
+# field block, the E_p penalty line, INCAR's `M_CONSTR` / `I_CONSTRAINED_M` /
+# `LSORBIT` tags, and the SAXIS frame. The emitted extxyz is code-neutral and
+# self-contained (structure + axes + gates baked in) — downstream, SLCE's
+# `read_extxyz` never touches an INCAR again.
+
+# Last occurrence of an INCAR tag's value string (VASP semantics), nothing if absent.
+function _incar_tag_value(lines::Vector{String}, key::String)::Union{String,Nothing}
+    val = nothing
+    for line in lines
+        bare = _strip_comment(line)
+        _tag_key(bare) == key || continue
+        eq = findfirst('=', bare)
+        eq === nothing && continue
+        val = strip(bare[nextind(bare, eq):end])
+    end
+    return val
+end
+
+function _incar_bool(s::AbstractString, key::String, path::AbstractString)::Bool
+    t = uppercase(strip(s, ['.', ' ']))
+    startswith(t, "T") && return true
+    startswith(t, "F") && return false
+    throw(ArgumentError("INCAR $path: cannot parse $key = \"$s\" as a boolean"))
+end
+
+# M_CONSTR (SAXIS frame, magnitude · direction per atom) → 3 × nat unit axes in the
+# Cartesian frame; a ~zero vector means "no axis for this atom" (an exactly-zero column).
+function _mconstr_axes(path::AbstractString, nat::Int, R)::Matrix{Float64}
+    lines = _join_continuations(read(path, String))
+    val = _incar_tag_value(lines, "M_CONSTR")
+    val === nothing &&
+        throw(ArgumentError("INCAR $path has no M_CONSTR tag — a transverse-penalty " *
+                            "(mode 1) run's constraint axes live there and cannot " *
+                            "be reconstructed from anything else"))
+    v = _parse_floats(val)
+    length(v) == 3 * nat ||
+        throw(ArgumentError("INCAR $path: M_CONSTR carries $(length(v)) numbers, " *
+                            "expected 3 × $nat"))
+    axes = zeros(3, nat)
+    for a = 1:nat
+        m = SVector{3,Float64}(v[3a - 2], v[3a - 1], v[3a])
+        nm = norm(m)
+        nm <= 1e-12 && continue
+        u = R * (m / nm)                        # SAXIS → Cartesian, spin channel
+        axes[1, a] = u[1]; axes[2, a] = u[2]; axes[3, a] = u[3]
+    end
+    return axes
+end
+
+"""
+    oszicar_to_extxyz(out_path, oszicar_paths, poscar_path;
+                      constraint_mode = nothing, incar = nothing,
+                      saxis = [0, 0, 1], energy_kind = :free, setup_id = nothing,
+                      soc = nothing, ep_warn = 1e-3, comment = nothing,
+                      sign_gate_min = 5e-3, axis_angle_p99_max = 5.0)
+        -> Vector{TrainingDatum}
+
+Generate a self-contained extended-XYZ training set (`SLCE.write_extxyz`) from
+constrained-noncollinear OSZICARs plus the POSCAR that defines the structure (an
+OSZICAR carries no positions, which is why the POSCAR is a required argument).
+Every VASP-specific convention is resolved HERE, once: both moment tables are read
+(`MW_int` → the smoothed decomposition + configuration coordinates, `M_int` →
+`moments_bare`, the projection target), the `lambda*MW_perp` block becomes the
+constraining field (eV/μ_B — the emitted `units_field` key corrects the historic
+"T" header mislabel), the `E_p` penalty is subtracted from the energy (`ep_warn`
+as in [`Oszicar`](@ref)), and all spin-channel quantities are rotated from the
+`SAXIS` frame to Cartesian.
+
+`constraint_mode` declares the constraint class (`1` = transverse-penalty, `4` =
+direction-pinning, VASP's `I_CONSTRAINED_M` numbers). When `incar` is given the
+declared mode is cross-checked against the INCAR's `I_CONSTRAINED_M` (loud on
+mismatch), and an omitted `constraint_mode` is read from there. **Mode 1 requires
+`incar`** — the constraint axes live in `M_CONSTR` and cannot be reconstructed
+from the converged moments where `‖M‖ → 0`. `incar` is one path (shared axes) or
+one path per OSZICAR (per-sample constraints); for mode 4 it is optional but
+recommended (the axes feed the load-time angle gate). `soc`, when omitted, is
+read from the INCAR's `LSORBIT` if present.
+
+The axis-consistency gates (`SLCE.check_moment_gates`) run before the file is
+written — the generated extxyz is verified at birth and re-verified at every
+load; after generation the INCAR is never consulted again. The info line records
+`field_sign=vasp:lambda*MW_perp` and `source=oszicar:<n>:sha256:<hex>` (a digest
+over the OSZICAR bytes) for provenance.
+"""
+function oszicar_to_extxyz(out_path::AbstractString,
+                           oszicar_paths::AbstractVector{<:AbstractString},
+                           poscar_path::AbstractString;
+                           constraint_mode::Union{Integer,Nothing} = nothing,
+                           incar::Union{Nothing,AbstractString,
+                                        AbstractVector{<:AbstractString}} = nothing,
+                           saxis::AbstractVector{<:Real} = SVector(0.0, 0.0, 1.0),
+                           energy_kind::Symbol = :free,
+                           setup_id::Union{AbstractString,Nothing} = nothing,
+                           soc::Union{Bool,Nothing} = nothing,
+                           ep_warn::Real = 1e-3,
+                           comment::Union{Nothing,AbstractString} = nothing,
+                           sign_gate_min::Real = 5e-3,
+                           axis_angle_p99_max::Real = 5.0)::Vector{TrainingDatum}
+    isempty(oszicar_paths) && throw(ArgumentError("oszicar_to_extxyz: no OSZICARs"))
+    crystal = read_poscar(poscar_path)
+    nat = n_atoms(crystal)
+    R = _saxis_rotation(SVector{3,Float64}(saxis))
+    nconf = length(oszicar_paths)
+
+    incars = incar === nothing ? nothing :
+             incar isa AbstractString ? fill(String(incar), nconf) :
+             collect(String, incar)
+    incars === nothing || length(incars) == nconf ||
+        throw(ArgumentError("oszicar_to_extxyz: $(length(incars)) INCARs for " *
+                            "$nconf OSZICARs (pass one, or one per OSZICAR)"))
+
+    # resolve + cross-check the constraint mode and soc against the INCAR(s)
+    mode = constraint_mode === nothing ? nothing : Int(constraint_mode)
+    if incars !== nothing
+        for p in unique(incars)
+            isfile(p) || throw(ArgumentError("no such INCAR: $p"))
+            lines = _join_continuations(read(p, String))
+            mstr = _incar_tag_value(lines, "I_CONSTRAINED_M")
+            if mstr !== nothing
+                mfile = tryparse(Int, strip(mstr))
+                mfile === nothing &&
+                    throw(ArgumentError("INCAR $p: I_CONSTRAINED_M = \"$mstr\" is " *
+                                        "not an integer"))
+                if mode === nothing
+                    mode = mfile
+                elseif mode != mfile
+                    throw(ArgumentError("declared constraint_mode = $mode but INCAR " *
+                                        "$p says I_CONSTRAINED_M = $mfile — resolve " *
+                                        "the provenance before generating"))
+                end
+            end
+            if soc === nothing
+                sstr = _incar_tag_value(lines, "LSORBIT")
+                sstr === nothing || (soc = _incar_bool(sstr, "LSORBIT", p))
+            end
+        end
+    end
+    mode == 1 && incars === nothing &&
+        throw(ArgumentError("constraint_mode = 1 (transverse-penalty type) requires " *
+                            "`incar`: the constraint axes live in M_CONSTR and " *
+                            "cannot be reconstructed from the converged moments " *
+                            "where ‖M‖ → 0"))
+
+    data = Vector{TrainingDatum}(undef, nconf)
+    hasher = SHA.SHA2_256_CTX()
+    for (i, path) in enumerate(oszicar_paths)
+        isfile(path) || throw(ArgumentError("OSZICAR not found: $path"))
+        SHA.update!(hasher, read(path))
+        energy, ep, mw = _oszicar_energy_moments(path, energy_kind, false)
+        _, _, mint = _oszicar_energy_moments(path, energy_kind, true)
+        size(mw, 2) == nat ||
+            throw(ArgumentError("OSZICAR $path: $(size(mw, 2)) atoms in the moment " *
+                                "table, POSCAR $poscar_path has $nat"))
+        if ep !== nothing
+            energy -= ep            # TOTEN carries exactly one copy of E_p
+            abs(ep) > ep_warn &&
+                @warn "OSZICAR constraint penalty E_p = $ep exceeds ep_warn = " *
+                      "$ep_warn — the energy is corrected (E_p subtracted), but a " *
+                      "penalty this large means the converged moments deviate " *
+                      "materially from the constrained directions" path
+        end
+        field = _oszicar_field(path, nat)
+        axes = incars === nothing ? nothing : _mconstr_axes(incars[i], nat, R)
+        c = field !== nothing && any(!iszero, field)
+        prov = DatumProvenance(; constrained = c, torque_qualified = c,
+                               setup_id = setup_id, soc = soc)
+        if field === nothing
+            data[i] = spin_datum(energy, R * mw; moments_bare = R * mint,
+                                constraint_axes = axes, constraint_mode = mode,
+                                provenance = prov)
+        else
+            data[i] = spin_datum(energy, R * mw, R * field; moments_bare = R * mint,
+                                constraint_axes = axes, constraint_mode = mode,
+                                provenance = prov)
+        end
+    end
+    digest = bytes2hex(SHA.digest!(hasher))
+    write_extxyz(out_path, data, crystal;
+                 field_sign = "vasp:lambda*MW_perp",
+                 source = "oszicar:$nconf:sha256:$digest", comment = comment,
+                 sign_gate_min = sign_gate_min,
+                 axis_angle_p99_max = axis_angle_p99_max)
+    return data
+end
+
+oszicar_to_extxyz(out_path::AbstractString, oszicar_path::AbstractString,
+                  poscar_path::AbstractString; kwargs...) =
+    oszicar_to_extxyz(out_path, [oszicar_path], poscar_path; kwargs...)
 
 end # module VASP

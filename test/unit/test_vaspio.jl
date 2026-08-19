@@ -314,3 +314,95 @@ end
         @test_throws ArgumentError Oszicar(["nonexistent"]; energy_kind = :bogus)
     end
 end
+
+@testset "oszicar_to_extxyz — the VASP → extxyz generator" begin
+    using SLCETools.VASP: oszicar_to_extxyz
+    dir = mktempdir()
+    poscar = _write(dir, "POSCAR_gen",
+        "FePt\n1.0\n 3.0 0.0 0.0\n 0.0 3.0 0.0\n 0.0 0.0 4.0\nFe Pt\n1 1\nDirect\n 0.0 0.0 0.0\n 0.5 0.5 0.5\n")
+    incar4 = _write(dir, "INCAR_gen4",
+        "I_CONSTRAINED_M = 4\nLSORBIT = .FALSE.\nLAMBDA = 10\n" *
+        "M_CONSTR = 1.0 0.0 0.0  0.0 0.0 2.0\n")
+    osz = [_write(dir, "gen_$(i).oszicar", _oszicar_text(; ep = "0.50000E-03"))
+           for i = 1:3]
+
+    @testset "mode 4: metadata read from the INCAR, values survive bitwise" begin
+        out = joinpath(dir, "gen4.extxyz")
+        data = oszicar_to_extxyz(out, osz, poscar; incar = incar4, setup_id = "t")
+        @test length(data) == 3
+        @test data[1].constraint_mode == 4          # from I_CONSTRAINED_M
+        @test data[1].provenance.soc == false       # from LSORBIT
+        @test data[1].provenance.setup_id == "t"
+        # M_CONSTR magnitudes are normalized away: axes are unit columns
+        @test data[1].constraint_axes[:, 1] ≈ [1.0, 0.0, 0.0]
+        @test data[1].constraint_axes[:, 2] ≈ [0.0, 0.0, 1.0]
+        # E_p is subtracted exactly as the Oszicar reader does
+        ref = read_configs(Oszicar(osz[1]))[1]
+        @test data[1].energy == ref.energy
+        @test data[1].field == ref.field
+        # the file round-trips the bare channels bitwise
+        back = read_extxyz(out)
+        @test length(back) == 3
+        @test back[1].moments_bare == data[1].moments_bare
+        @test back[1].moments_bare[:, 1] ≈ [1.1, 0.0, 0.0]      # M_int, not MW
+        @test back[1].field == data[1].field
+        @test back[1].constraint_axes == data[1].constraint_axes
+        @test back[1].constraint_mode == 4
+        # source records the digest, field_sign the convention
+        info = split(readlines(out)[2])
+        @test any(startswith(t, "source=oszicar:3:sha256:") for t in info)
+        @test any(t == "field_sign=vasp:lambda*MW_perp" for t in info)
+    end
+
+    @testset "declared mode cross-checked against the INCAR" begin
+        @test_throws ArgumentError oszicar_to_extxyz(joinpath(dir, "x.extxyz"), osz,
+                                                     poscar; incar = incar4,
+                                                     constraint_mode = 1)
+        # matching declaration passes
+        data = oszicar_to_extxyz(joinpath(dir, "x.extxyz"), osz, poscar;
+                                incar = incar4, constraint_mode = 4)
+        @test data[1].constraint_mode == 4
+    end
+
+    @testset "mode 1 requires the INCAR (axes are not reconstructible)" begin
+        @test_throws ArgumentError oszicar_to_extxyz(joinpath(dir, "y.extxyz"), osz,
+                                                     poscar; constraint_mode = 1)
+    end
+
+    @testset "generation-time sign gate: a flipped bare moment never becomes a file" begin
+        incar1 = _write(dir, "INCAR_gen1",
+            "I_CONSTRAINED_M = 1\nLSORBIT = .FALSE.\n" *
+            "M_CONSTR = 1.0 0.0 0.0  0.0 0.0 2.0\n")
+        # mint flipped against mw on atom 1: y = ê_c·M < 0 while ê_MW·ê_c > 0
+        bad = _write(dir, "gen_bad.oszicar",
+                     _oszicar_text(; mint = [(-1.1, 0.0, 0.0), (0.0, 0.0, 2.1)]))
+        out = joinpath(dir, "never.extxyz")
+        err = try
+            oszicar_to_extxyz(out, [bad], poscar; incar = incar1)
+            nothing
+        catch e
+            e
+        end
+        @test err isa ArgumentError && occursin("sign-consistency", err.msg)
+        @test !isfile(out)                          # verified at birth, or not born
+        # the consistent sibling generates fine under the same INCAR
+        data = oszicar_to_extxyz(out, [osz[1]], poscar; incar = incar1)
+        @test data[1].constraint_mode == 1
+    end
+
+    @testset "M_CONSTR length mismatch is loud" begin
+        short = _write(dir, "INCAR_short",
+            "I_CONSTRAINED_M = 4\nM_CONSTR = 1.0 0.0 0.0\n")
+        @test_throws ArgumentError oszicar_to_extxyz(joinpath(dir, "z.extxyz"), osz,
+                                                     poscar; incar = short)
+    end
+
+    @testset "SAXIS rotation matches the Oszicar reader" begin
+        out = joinpath(dir, "sax.extxyz")
+        sax = [1.0, 1.0, 0.5]
+        data = oszicar_to_extxyz(out, osz, poscar; incar = incar4, saxis = sax)
+        ref = read_configs(Oszicar(osz; saxis = sax))
+        @test data[1].directions ≈ ref[1].directions
+        @test data[1].field == ref[1].field
+    end
+end

@@ -141,7 +141,17 @@ Inherited from the core (`SLCE`'s `CLAUDE.md`); the ones this package leans on:
   printed BEFORE the accepted `F=` line (warning above `ep_warn`); a dangling `E_p`
   from a truncated tail whose own `F=` never got written is ignored — the fitted
   Hamiltonian must never see the penalty. Absent-≠-zero applies here too: no `E_p` line
-  means an unconstrained run, and nothing is subtracted. Gates: `test/unit/test_vaspio.jl` (read),
+  means an unconstrained run, and nothing is subtracted. (7) **`oszicar_to_extxyz` is the
+  one place that knows VASP's vocabulary for the adiabatic-moment channel** (both OSZICAR
+  moment tables — `MW_int` cols 2-4 AND `M_int` cols 5-7 via two `_oszicar_energy_moments`
+  passes — plus INCAR `M_CONSTR`/`I_CONSTRAINED_M`/`LSORBIT`): the emitted extxyz is
+  code-neutral and self-contained, `SLCE.check_moment_gates` runs BEFORE writing (a
+  violating set never becomes a file), mode 1 REQUIRES the INCAR (axes not
+  reconstructible from converged moments where `‖M‖ → 0`), and a declared
+  `constraint_mode` is cross-checked against `I_CONSTRAINED_M` — never silently
+  preferred. `M_CONSTR` magnitudes are normalized away (axes are unit or exactly-zero
+  columns) and rotated by the SAME `_saxis_rotation` as every other spin channel.
+  Gates: `test/unit/test_vaspio.jl` (read + the generator testset),
   `test/unit/test_vasp_incar.jl` (write, round-trip / order / formatting), `test/oracle/`
   (parsers vs Magesty bit-for-bit). The sampler gives only directions + an order parameter
   `m_a ∈ [0,1]`, **not** μ_B magnitudes — the write magnitudes are an external input.
