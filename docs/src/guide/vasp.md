@@ -61,6 +61,26 @@ SLCETools.VASP.read_poscar
 SLCETools.VASP.Oszicar
 ```
 
+### Generating a self-contained extended-XYZ training set
+
+Reading OSZICARs at every fit re-resolves VASP's conventions each time. The alternative is
+to resolve them **once**, at generation: `oszicar_to_extxyz` reads the OSZICARs (both moment
+tables, the constraining field, `E_p`) together with the POSCAR that defines the structure
+and the INCAR that declares the constraint class, rotates everything to Cartesian, runs the
+axis-consistency gates, and writes the extended-XYZ container that `SLCE.read_extxyz` loads
+with no VASP knowledge at all. The info line records the constraint-mode provenance and a
+digest of the source files.
+
+```julia
+using SLCETools.VASP: oszicar_to_extxyz
+oszicar_to_extxyz("train.extxyz", ["run1/OSZICAR", "run2/OSZICAR"], "run1/POSCAR";
+                  incar = "run1/INCAR")                    # constraint_mode read from INCAR
+```
+
+```@docs
+SLCETools.VASP.oszicar_to_extxyz
+```
+
 ## Writing constrained-noncollinear inputs
 
 To turn sampled spin configurations into DFT jobs — the active-learning "label" step — write

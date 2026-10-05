@@ -6,6 +6,20 @@ release, so everything lives under *Unreleased*.
 
 ## [Unreleased]
 
+### Fixed — CI restored: JET-typed JSON escape loop, `oszicar_to_extxyz` in the manual (2026-10-05)
+
+Both CI jobs had been red since the `oszicar_to_extxyz` landing (2026-08-20, 08-25):
+
+- **JET** flagged `_emit_json`'s `ch < '\x20'` as a non-boolean condition — the
+  character iterated from an `AbstractString`-typed value inferred as `Any`, so the
+  comparison's return type widened to a union with a third-party `Cmp` type. The loop
+  variable is now declared `ch::Char`; no behavior change (every `AbstractChar`
+  converts, and the escape table is the same).
+- **Documenter** (`checkdocs = :exports`) refused the build because the exported
+  `SLCETools.VASP.oszicar_to_extxyz` had no `@docs` entry. The VASP guide gains a
+  "Generating a self-contained extended-XYZ training set" subsection with the
+  docstring, and the API page's VASP paragraph names it.
+
 ### Added — `oszicar_to_extxyz`: the VASP → extended-XYZ generator (2026-08-20, adiabatic-moment step 2)
 
 `SLCETools.VASP.oszicar_to_extxyz(out, oszicars, poscar; incar, constraint_mode,

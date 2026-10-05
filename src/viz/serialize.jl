@@ -67,7 +67,7 @@ end
 function _emit_json(io::IO, x)
     if x isa AbstractString
         print(io, '"')
-        for ch in x
+        for ch::Char in x                        # typed: keeps `ch < '\x20'` a plain Bool for JET
             if ch == '"'
                 print(io, "\\\"")
             elseif ch == '\\'

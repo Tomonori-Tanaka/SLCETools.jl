@@ -83,7 +83,9 @@ MeanFieldEngine.multipole_average
 
 The namespaced `SLCETools.VASP` submodule is the concrete VASP adapter: it **reads** DFT
 training data ([`read_poscar`](@ref SLCETools.VASP.read_poscar),
-[`Oszicar`](@ref SLCETools.VASP.Oszicar)) and **writes** constrained-noncollinear inputs from
+[`Oszicar`](@ref SLCETools.VASP.Oszicar)), **generates** the self-contained extended-XYZ
+training container from them ([`oszicar_to_extxyz`](@ref SLCETools.VASP.oszicar_to_extxyz)),
+and **writes** constrained-noncollinear inputs from
 sampled configurations ([`write_inputs`](@ref SLCETools.VASP.write_inputs),
 [`write_incar`](@ref SLCETools.VASP.write_incar),
 [`write_poscar`](@ref SLCETools.VASP.write_poscar)). See [VASP I/O](guide/vasp.md); the
