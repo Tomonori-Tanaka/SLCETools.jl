@@ -92,6 +92,26 @@ end
         @test_throws ArgumentError read_poscar(_write(dir, "short", "too\nshort\n"))
     end
 
+    @testset "a malformed number names the file and the line" begin
+        errmsg(f) = try; f(); ""; catch e; e isa ArgumentError ? e.msg : "not ArgumentError"; end
+        good = "c\n1.0\n3.0 0 0\n0 3.0 0\n0 0 3.0\nFe\n1\nDirect\n0 0 0\n"
+        @test n_atoms(read_poscar(_write(dir, "P_ok", good))) == 1
+        pl = _write(dir, "P_lat", replace(good, "3.0 0 0" => "3.0x 0 0"))
+        m = errmsg(() -> read_poscar(pl))
+        @test occursin(pl, m) && occursin("line 3", m) && occursin("3.0x", m)
+        pp = _write(dir, "P_pos", replace(good, "Direct\n0 0 0" => "Direct\n0 0.5q 0"))
+        m = errmsg(() -> read_poscar(pp))
+        @test occursin(pp, m) && occursin("line 9", m)
+        # OSZICAR: a corrupt moment column and a corrupt field column
+        om = _write(dir, "O_mw", _oszicar_text(; mw = [(1.0, 0.0, "0.0q"), (0.0, 0.0, 2.0)]))
+        m = errmsg(() -> read_configs(Oszicar(om)))
+        @test occursin(om, m) && occursin("M_int", m) && occursin("0.0q", m)
+        of = _write(dir, "O_fld", _oszicar_text(; field = [(0.0, "0.02z", 0.0),
+                                                           (0.03, 0.0, 0.0)]))
+        m = errmsg(() -> read_configs(Oszicar(of)))
+        @test occursin(of, m) && occursin("lambda*MW_perp", m) && occursin("atom 1", m)
+    end
+
     @testset "OSZICAR — energy, moments, field, torque" begin
         p = _write(dir, "OSZICAR1", _oszicar_text())
         d = read_configs(Oszicar(p))[1]

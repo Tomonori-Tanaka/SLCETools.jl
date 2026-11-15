@@ -340,6 +340,19 @@ _unit(v) = v / norm(v)
         @test_throws ArgumentError V.write_inputs(mktempdir(), cr, config[:, 1:2];
                                                   magmoms = 1.0)                 # wrong atom count
         @test_throws ArgumentError V._saxis_rotation((0.0, 0.0, 0.0))            # zero SAXIS
+        # a malformed template number names the tag, not just the token
+        merr = try
+            V.write_incar(p, config; base = "MAGMOM = 0 0 2x  0 0 2  0 0 2\n"); ""
+        catch e
+            e isa ArgumentError ? e.msg : "not ArgumentError"
+        end
+        @test occursin("MAGMOM", merr) && occursin("2x", merr)
+        serr = try
+            V.write_incar(p, config; magmoms = 1.0, base = "SAXIS = 0 0 1q\n"); ""
+        catch e
+            e isa ArgumentError ? e.msg : "not ArgumentError"
+        end
+        @test occursin("SAXIS", serr) && occursin("1q", serr)
         # template MAGMOM with the wrong atom count cannot supply the magnitudes
         @test_throws ArgumentError V.write_incar(p, config;
                                                  base = "MAGMOM = 0 0 2  0 0 2\n")

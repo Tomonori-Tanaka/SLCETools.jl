@@ -6,6 +6,17 @@ release, so everything lives under *Unreleased*.
 
 ## [Unreleased]
 
+### Fixed — a malformed number in a VASP file names the file and the place (2026-11-15)
+
+`read_poscar`, the OSZICAR reader (`M_int` and `lambda*MW_perp` blocks) and the INCAR
+value lists (template `MAGMOM` / `SAXIS`, `M_CONSTR`) parsed numbers with a bare
+`parse(Float64, …)`, whose error quoted the token and nothing else — on a batch of
+hundreds of OSZICARs it did not say which file. They now go through `_vasp_float` /
+`_vasp_int`, which name the file, the line or block, and the token (still an
+`ArgumentError`). `write_poscar` also checks that its species grouping accounts for
+every atom before writing (a dependency on `Crystal`'s species invariant, stated where
+it is used). No value read from a valid file changes. (OPEN-WORK T-3.)
+
 ### Fixed — CI restored: JET-typed JSON escape loop, `oszicar_to_extxyz` in the manual (2026-10-05)
 
 Both CI jobs had been red since the `oszicar_to_extxyz` landing (2026-08-20, 08-25):

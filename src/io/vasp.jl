@@ -76,7 +76,7 @@ function read_poscar(path::AbstractString)::Crystal
         toks = split(strip(lines[2 + i]))
         length(toks) >= 3 || throw(ArgumentError("bad lattice vector on line $(2 + i) of $path"))
         for j = 1:3
-            A_raw[j, i] = parse(Float64, toks[j])   # column i = i-th lattice vector
+            A_raw[j, i] = _vasp_float(toks[j], "$path, line $(2 + i)")   # column i
         end
     end
     # Negative scale = target volume (VASP convention); otherwise a plain length scale.
@@ -123,7 +123,7 @@ function read_poscar(path::AbstractString)::Crystal
         toks = split(strip(lines[li]))
         length(toks) >= 3 || throw(ArgumentError("bad position on line $li of $path"))
         for j = 1:3
-            pos[j, a] = parse(Float64, toks[j])
+            pos[j, a] = _vasp_float(toks[j], "$path, line $li")
         end
     end
     # Cartesian coords carry the same scaling; converting to fractional cancels it.
@@ -153,6 +153,13 @@ function write_poscar(path::AbstractString, crystal::Crystal;
     nsp = length(crystal.species_labels)
     groups = [findall(==(s), crystal.species) for s = 1:nsp]
     present = [s for s = 1:nsp if !isempty(groups[s])]
+    # The file lists atoms grouped by species, so every atom must land in exactly one
+    # group or the counts line and the coordinates disagree with the crystal. `Crystal`
+    # guarantees `species ⊆ 1:nsp` today; this states the dependency where it is used.
+    sum(length, groups) == n_atoms(crystal) ||
+        throw(ArgumentError("write_poscar: the species groups hold " *
+                            "$(sum(length, groups)) atoms, the crystal has " *
+                            "$(n_atoms(crystal)) — a species index outside 1:$nsp"))
     row(v) = join((string(v[k]) for k = 1:3), "  ")
     open(path, "w") do io
         println(io, comment)
@@ -263,7 +270,7 @@ function _oszicar_energy_moments(path::AbstractString, energy_kind::Symbol, mint
     tmp = SVector{3,Float64}[]
     collecting = false
     cols = mint ? (5, 6, 7) : (2, 3, 4)
-    for line in eachline(path)
+    for (ln, line) in enumerate(eachline(path))
         if occursin("M_int", line)
             collecting = true
             empty!(tmp)
@@ -275,9 +282,10 @@ function _oszicar_energy_moments(path::AbstractString, energy_kind::Symbol, mint
         end
         if collecting
             p = split(line)
-            push!(tmp, SVector{3,Float64}(parse(Float64, p[cols[1]]),
-                                          parse(Float64, p[cols[2]]),
-                                          parse(Float64, p[cols[3]])))
+            where = "$path, line $ln (M_int block)"
+            push!(tmp, SVector{3,Float64}(_vasp_float(p[cols[1]], where),
+                                          _vasp_float(p[cols[2]], where),
+                                          _vasp_float(p[cols[3]], where)))
         end
         if occursin("F=", line)
             # take the token right after the keyword (robust to other fields shifting),
@@ -339,9 +347,10 @@ function _oszicar_field(path::AbstractString, nat::Int)::Union{Matrix{Float64},N
             p = split(line)
             index = length(p) == 4 ? tryparse(Int, p[1]) : nothing
             if index !== nothing && 1 <= index <= nat
-                tmp[1, index] = parse(Float64, p[2])
-                tmp[2, index] = parse(Float64, p[3])
-                tmp[3, index] = parse(Float64, p[4])
+                where = "$path (lambda*MW_perp block, atom $index)"
+                tmp[1, index] = _vasp_float(p[2], where)
+                tmp[2, index] = _vasp_float(p[3], where)
+                tmp[3, index] = _vasp_float(p[4], where)
                 got = true
                 anygot = true
                 continue
@@ -435,15 +444,34 @@ end
 _format_moments(M::AbstractMatrix{<:Real}) =
     join((@sprintf("%.9f %.9f %.9f", M[1, a], M[2, a], M[3, a]) for a = 1:size(M, 2)), "  ")
 
+# One number of a VASP file, or an error naming the file and the place. A bare
+# `parse(Float64, …)` throws an `ArgumentError` that quotes the token only, with no
+# file or line, which on a batch of hundreds of OSZICARs says nothing about which one.
+function _vasp_float(tok::AbstractString, where::AbstractString)::Float64
+    v = tryparse(Float64, tok)
+    v === nothing &&
+        throw(ArgumentError("$where: cannot parse \"$tok\" as a number"))
+    return v
+end
+
+function _vasp_int(tok::AbstractString, where::AbstractString)::Int
+    v = tryparse(Int, tok)
+    v === nothing &&
+        throw(ArgumentError("$where: cannot parse \"$tok\" as an integer"))
+    return v
+end
+
 # Expand a VASP numeric value list, honouring the `n*v` repeat syntax, to a flat vector.
-function _parse_floats(s::AbstractString)::Vector{Float64}
+# `where` names the file and tag for the error message.
+function _parse_floats(s::AbstractString,
+                       where::AbstractString = "VASP value list")::Vector{Float64}
     out = Float64[]
     for tok in split(s)
         if occursin('*', tok)
             nstr, vstr = split(tok, '*'; limit = 2)
-            append!(out, fill(parse(Float64, vstr), parse(Int, nstr)))
+            append!(out, fill(_vasp_float(vstr, where), _vasp_int(nstr, where)))
         else
-            push!(out, parse(Float64, tok))
+            push!(out, _vasp_float(tok, where))
         end
     end
     return out
@@ -509,13 +537,15 @@ function _process_template(base)
         for segment in segments
             key = _tag_key(segment)
             if key == "MAGMOM"
-                magmom = _parse_floats(strip(split(segment, '='; limit = 2)[2]))
+                magmom = _parse_floats(strip(split(segment, '='; limit = 2)[2]),
+                                       "template INCAR, MAGMOM")
             elseif key == "M_CONSTR"
                 # dropped; re-emitted from the sampled directions
             else
                 key == "I_CONSTRAINED_M" && (has_icm = true)
                 if key == "SAXIS"
-                    sv = _parse_floats(strip(split(segment, '='; limit = 2)[2]))
+                    sv = _parse_floats(strip(split(segment, '='; limit = 2)[2]),
+                                       "template INCAR, SAXIS")
                     # Validate HERE: 2 components used to surface as a BoundsError
                     # deep inside `_saxis_rotation`, and 4 were silently truncated.
                     length(sv) == 3 || throw(ArgumentError(
@@ -809,7 +839,7 @@ function _mconstr_axes(path::AbstractString, nat::Int, R)::Matrix{Float64}
         throw(ArgumentError("INCAR $path has no M_CONSTR tag — a transverse-penalty " *
                             "(mode 1) run's constraint axes live there and cannot " *
                             "be reconstructed from anything else"))
-    v = _parse_floats(val)
+    v = _parse_floats(val, "INCAR $path, M_CONSTR")
     length(v) == 3 * nat ||
         throw(ArgumentError("INCAR $path: M_CONSTR carries $(length(v)) numbers, " *
                             "expected 3 × $nat"))
